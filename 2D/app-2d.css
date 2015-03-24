@@ -40,3 +40,7 @@
   text-shadow: 0 1px 0 #f3f3f3;
 }
 
+.ui-mobile .ui-page {
+  min-height: 100%;
+}
+

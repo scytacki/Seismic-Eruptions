@@ -1367,7 +1367,7 @@ function loadCount(click){
 		$("#error-date").html("");
 	}
 	if(click==0)
-	window.open("http://gizmoabhinav.github.io/Seismic-Eruptions/?mag="+binarySearch(0,100)+"&startdate="+(parseInt(year1)+1960)+"-"+(parseInt(month1)+1)+"-1&enddate="+(parseInt(year2)+1960)+"-"+(parseInt(month2)+1)+"-1","_self");
+	window.open("?mag="+binarySearch(0,100)+"&startdate="+(parseInt(year1)+1960)+"-"+(parseInt(month1)+1)+"-1&enddate="+(parseInt(year2)+1960)+"-"+(parseInt(month2)+1)+"-1","_self");
 	else
 	$("#magnitude-search").html("<p>Calculated magnitude cutoff : </p><p style='color:green'>"+binarySearch(0,100)+"</p>");
 };
@@ -1386,6 +1386,7 @@ function binarySearch(mag,max){
 			}
 		}
 }
+
 ;
 ;/*
 The 2D map has coordinates ranging from -180 to +180 from left to right and from +90 to -90 from top to bottom.
