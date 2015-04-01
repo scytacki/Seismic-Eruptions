@@ -555,14 +555,29 @@ require.define({"common/data-loader": function(exports, require, module) {
   DataLoader = (function() {
     function DataLoader() {}
 
-    DataLoader.prototype.load = function(url) {
+    DataLoader.prototype.load = function(url, _arg) {
+      var ajax, callback, _ref;
+      _ref = _arg != null ? _arg : {}, ajax = _ref.ajax, callback = _ref.callback;
       return new Promise((function(_this) {
         return function(resolve, reject) {
           var id, scriptDomElement;
-          id = 'request_' + Math.random().toString(36).substr(2, 8);
-          scriptDomElement = _this.injectScript(id, url);
-          _this.createListener(id, scriptDomElement, resolve, reject);
-          return document.body.appendChild(scriptDomElement);
+          if (ajax) {
+            return $.ajax({
+              url: url,
+              dataType: 'json',
+              success: function(data) {
+                return resolve(data);
+              },
+              error: function(request) {
+                return reject(request);
+              }
+            });
+          } else {
+            id = callback != null ? callback : 'request_' + Math.random().toString(36).substr(2, 8);
+            scriptDomElement = _this.injectScript(id, url, callback == null);
+            _this.createListener(id, scriptDomElement, resolve, reject);
+            return document.body.appendChild(scriptDomElement);
+          }
         };
       })(this));
     };
@@ -575,10 +590,13 @@ require.define({"common/data-loader": function(exports, require, module) {
       };
     };
 
-    DataLoader.prototype.injectScript = function(id, url) {
+    DataLoader.prototype.injectScript = function(id, url, appendCallback) {
       var scriptDomElement;
+      if (appendCallback == null) {
+        appendCallback = true;
+      }
       scriptDomElement = document.createElement('script');
-      scriptDomElement.src = url + '&callback=' + id;
+      scriptDomElement.src = url + (appendCallback ? '&callback=' + id : '');
       scriptDomElement.id = id;
       return scriptDomElement;
     };

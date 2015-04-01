@@ -1358,7 +1358,7 @@ require.define({"2D/map-controller": function(exports, require, module) {
     };
 
     MapController.prototype.initController = function() {
-      var geojsonTileLayer, hoverStyle, loader, spinnerOpts, style, unhoverStyle;
+      var geojsonTileLayer, hoverStyle, loader, promise, spinnerOpts, style, unhoverStyle;
       this.rainbow = new Rainbow();
       this.rainbow.setNumberRange(0, 700);
       this.timeLine = new TimelineLite({
@@ -1394,7 +1394,18 @@ require.define({"2D/map-controller": function(exports, require, module) {
       };
       if (this.map.parameters.timeline) {
         loader = new DataLoader();
-        return loader.load('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL()).then((function(_this) {
+        if (this.map.parameters.data != null) {
+          promise = loader.load(this.map.parameters.data, {
+            ajax: true
+          });
+        } else if ((this.map.parameters.datap != null) && (this.map.parameters.datap_callback != null)) {
+          promise = loader.load(this.map.parameters.datap, {
+            callback: this.map.parameters.datap_callback
+          });
+        } else {
+          promise = loader.load('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL());
+        }
+        return promise.then((function(_this) {
           return function(results) {
             var delay, feature, i, _i, _len, _ref;
             _this.map.values.size = results.features.length;
@@ -1552,7 +1563,10 @@ require.define({"2D/map": function(exports, require, module) {
       se: (p = util.getURLParameter('se')) ? L.latLng.apply(L, p.split(',')) : null,
       center: (p = util.getURLParameter('center')) ? L.latLng.apply(L, p.split(',')) : null,
       zoom: util.getURLParameter("zoom"),
-      timeline: util.getURLParameter('timeline')
+      timeline: util.getURLParameter('timeline'),
+      data: util.getURLParameter('data'),
+      datap: util.getURLParameter('datap'),
+      datap_callback: util.getURLParameter('datap_callback')
     };
 
     Map.prototype.values = {
@@ -1665,14 +1679,29 @@ require.define({"common/data-loader": function(exports, require, module) {
   DataLoader = (function() {
     function DataLoader() {}
 
-    DataLoader.prototype.load = function(url) {
+    DataLoader.prototype.load = function(url, _arg) {
+      var ajax, callback, _ref;
+      _ref = _arg != null ? _arg : {}, ajax = _ref.ajax, callback = _ref.callback;
       return new Promise((function(_this) {
         return function(resolve, reject) {
           var id, scriptDomElement;
-          id = 'request_' + Math.random().toString(36).substr(2, 8);
-          scriptDomElement = _this.injectScript(id, url);
-          _this.createListener(id, scriptDomElement, resolve, reject);
-          return document.body.appendChild(scriptDomElement);
+          if (ajax) {
+            return $.ajax({
+              url: url,
+              dataType: 'json',
+              success: function(data) {
+                return resolve(data);
+              },
+              error: function(request) {
+                return reject(request);
+              }
+            });
+          } else {
+            id = callback != null ? callback : 'request_' + Math.random().toString(36).substr(2, 8);
+            scriptDomElement = _this.injectScript(id, url, callback == null);
+            _this.createListener(id, scriptDomElement, resolve, reject);
+            return document.body.appendChild(scriptDomElement);
+          }
         };
       })(this));
     };
@@ -1685,10 +1714,13 @@ require.define({"common/data-loader": function(exports, require, module) {
       };
     };
 
-    DataLoader.prototype.injectScript = function(id, url) {
+    DataLoader.prototype.injectScript = function(id, url, appendCallback) {
       var scriptDomElement;
+      if (appendCallback == null) {
+        appendCallback = true;
+      }
       scriptDomElement = document.createElement('script');
-      scriptDomElement.src = url + '&callback=' + id;
+      scriptDomElement.src = url + (appendCallback ? '&callback=' + id : '');
       scriptDomElement.id = id;
       return scriptDomElement;
     };
