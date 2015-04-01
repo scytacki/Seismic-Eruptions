@@ -553,10 +553,7 @@ require.define({"common/data-loader": function(exports, require, module) {
   var DataLoader;
 
   DataLoader = (function() {
-    function DataLoader(map) {
-      this.map = map;
-      void 0;
-    }
+    function DataLoader() {}
 
     DataLoader.prototype.load = function(url) {
       return new Promise((function(_this) {

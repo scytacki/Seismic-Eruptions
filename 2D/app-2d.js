@@ -106,9 +106,13 @@ require.define({"2D/app": function(exports, require, module) {
         return function(event, ui) {
           $.mobile.loading('show');
           _this.map.leafletMap.invalidateSize(true);
-          _this.map.parameters.defaultInit();
           _this.map.layers.baseLayer2.addTo(_this.map.leafletMap);
-          _this.map.leafletMap.fitBounds([[50, 40], [-20, -40]]);
+          if ((_this.map.parameters.center != null) && (_this.map.parameters.zoom != null)) {
+            _this.map.leafletMap.setView(_this.map.parameters.center, _this.map.parameters.zoom);
+          } else {
+            _this.map.leafletMap.fitBounds(L.latLngBounds(_this.map.parameters.nw, _this.map.parameters.se));
+          }
+          _this.controller.initController();
           _this.controller.timeLine.timeScale(_this.controller.speed);
           _this.controller.timeLine.pause();
           $.mobile.loading('hide');
@@ -121,31 +125,45 @@ require.define({"2D/app": function(exports, require, module) {
 
     App.prototype.init = function() {
       var drawingMode, elem, formatDate, maxSelected, minSelected, removeDrawingTool, startDrawingTool;
-      $('#play').click(function() {
-        return this.controller.timeLine.resume();
-      });
-      $('#pause').click(function() {
-        return this.controller.timeLine.pause();
-      });
-      $('#speedup').click(function() {
-        this.controller.speed *= 1.5;
-        return this.controller.timeLine.timeScale(this.controller.speed);
-      });
-      $('#speeddown').click(function() {
-        if (this.controller.speed >= 0.5) {
-          this.controller.speed /= 2;
-          return this.controller.timeLine.timeScale(this.controller.speed);
-        }
-      });
-      $('#changeparams').click(function() {
-        return this.controller.timeLine.pause();
-      });
-      $('#editparamscancel').click(function() {
-        return this.controller.timeLine.resume();
-      });
-      $('#editparamsenter').click(function() {
-        return this.controller.timeLine.pause();
-      });
+      $('#play').click((function(_this) {
+        return function() {
+          return _this.controller.timeLine.resume();
+        };
+      })(this));
+      $('#pause').click((function(_this) {
+        return function() {
+          return _this.controller.timeLine.pause();
+        };
+      })(this));
+      $('#speedup').click((function(_this) {
+        return function() {
+          _this.controller.speed *= 1.5;
+          return _this.controller.timeLine.timeScale(_this.controller.speed);
+        };
+      })(this));
+      $('#speeddown').click((function(_this) {
+        return function() {
+          if (_this.controller.speed >= 0.5) {
+            _this.controller.speed /= 2;
+            return _this.controller.timeLine.timeScale(_this.controller.speed);
+          }
+        };
+      })(this));
+      $('#changeparams').click((function(_this) {
+        return function() {
+          return _this.controller.timeLine.pause();
+        };
+      })(this));
+      $('#editparamscancel').click((function(_this) {
+        return function() {
+          return _this.controller.timeLine.resume();
+        };
+      })(this));
+      $('#editparamsenter').click((function(_this) {
+        return function() {
+          return _this.controller.timeLine.pause();
+        };
+      })(this));
       $('#daterange').dateRangeSlider({
         arrows: false,
         bounds: {
@@ -220,28 +238,28 @@ require.define({"2D/app": function(exports, require, module) {
       };
       $('#index').click(function() {
         $('#playcontrols').fadeIn();
-        $('#slider').fadeIn();
+        $('#slider-wrapper').fadeIn();
         $('#date').fadeIn();
         setTimeout(function() {
           return $('#playcontrols').fadeOut();
         }, 5000);
         return setTimeout(function() {
-          $('#slider').fadeOut();
+          $('#slider-wrapper').fadeOut();
           return $('#date').fadeOut();
         }, 12000);
       });
       $('#playback').hover(function() {
         $('#playcontrols').fadeIn();
-        $('#slider').fadeIn();
+        $('#slider-wrapper').fadeIn();
         $('#date').fadeIn();
         return setTimeout(function() {
-          $('#slider').fadeOut();
+          $('#slider-wrapper').fadeOut();
           $('#date').fadeOut();
           return $('#playcontrols').fadeOut();
         }, 8000);
       });
       setTimeout(function() {
-        $('#slider').fadeOut();
+        $('#slider-wrapper').fadeOut();
         $('#date').fadeOut();
         return $('#playcontrols').fadeOut();
       }, 10000);
@@ -258,7 +276,7 @@ require.define({"2D/app": function(exports, require, module) {
               if (!_this.map.leafletMap.hasLayer(_this.map.earthquakes.circles[i])) {
                 _this.map.earthquakes.circles[i].setStyle({
                   fillOpacity: 0.5,
-                  fillColor: "#" + _this.rainbow.colourAt(_this.map.earthquakes.depth[i])
+                  fillColor: "#" + _this.controller.rainbow.colourAt(_this.map.earthquakes.depth[i])
                 });
                 _this.map.earthquakes.circles[i].addTo(_this.map.leafletMap);
               }
@@ -334,7 +352,7 @@ require.define({"2D/app": function(exports, require, module) {
         return loadCount(1);
       });
       startDrawingTool = function() {
-        var i, _i;
+        var i, _i, _ref;
         $('#overlay').fadeIn();
         $('#startDrawingToolButton').fadeOut();
         $('#Drawingtools').fadeIn();
@@ -346,11 +364,11 @@ require.define({"2D/app": function(exports, require, module) {
         document.getElementById("speedup").disabled = true;
         document.getElementById("speeddown").disabled = true;
         tl.pause();
-        for (i = _i = 0; _i < size; i = _i += 1) {
+        for (i = _i = 0, _ref = this.map.values.size; _i < _ref; i = _i += 1) {
           if (!this.map.leafletMap.hasLayer(this.map.earthquakes.circles[i])) {
             this.map.earthquakes.circles[i].setStyle({
               fillOpacity: 0.5,
-              fillColor: "#" + this.rainbow.colourAt(this.map.earthquakes.depth[i])
+              fillColor: "#" + this.controller.rainbow.colourAt(this.map.earthquakes.depth[i])
             });
             this.map.earthquakes.circles[i].addTo(this.map.leafletMap);
           }
@@ -453,9 +471,19 @@ require.define({"2D/cross-section": function(exports, require, module) {
       this._updateLine(p0, p1);
       this._updateRect(p0, p1);
       this._createEditControls();
+      this.current = {
+        center: this.map.getCenter(),
+        zoom: this.map.getZoom()
+      };
       if (this._rect != null) {
         return this.map.fitBounds(this._rect.getBounds());
       }
+    };
+
+    CrossSection.prototype.destroy = function() {
+      this.map.removeLayer(this._featureGroup);
+      this.map.removeLayer(this._editMarkerGroup);
+      return this.map.setView(this.current.center, this.current.zoom);
     };
 
     CrossSection.prototype._updateLine = function(p0, p1) {
@@ -1186,15 +1214,28 @@ require.define({"2D/magnitude-search": function(exports, require, module) {
 
 require.define({"2D/map-controller": function(exports, require, module) {
   (function() {
-  var MapController;
+  var DataLoader, MapController;
+
+  DataLoader = require('common/data-loader');
 
   MapController = (function() {
     function MapController(map) {
       this.map = map;
       this.map.controller = this;
       this.util = require('common/util');
-      this.initController();
+      this.values = {};
     }
+
+    MapController.prototype.values = {
+      timediff: 0,
+      size: 0
+    };
+
+    MapController.prototype.earthquakes = {
+      circles: [],
+      time: [],
+      depth: []
+    };
 
     MapController.prototype.timeLine = null;
 
@@ -1224,7 +1265,7 @@ require.define({"2D/map-controller": function(exports, require, module) {
       var bottom, bounds, height, left, numTiles, nw, nwPixel, nwTile, right, se, sePixel, seTile, top, width;
       numTiles = Math.pow(2, zoom);
       if (zoom === 0) {
-        return 15000;
+        return 20000;
       } else if (zoom <= 3) {
         return Math.floor(20000 / Math.pow(numTiles, 2));
       }
@@ -1251,6 +1292,16 @@ require.define({"2D/map-controller": function(exports, require, module) {
     };
 
     MapController.prototype._getCurrentMag = function(zoom) {
+      var mag;
+      mag = this._getDesiredMag(zoom);
+      this.map.parameters.mag = mag;
+      return mag;
+    };
+
+    MapController.prototype._getDesiredMag = function(zoom) {
+      if (this.map.parameters.desiredMag != null) {
+        return this.map.parameters.desiredMag;
+      }
       if (zoom > 8) {
         return 2;
       }
@@ -1260,29 +1311,54 @@ require.define({"2D/map-controller": function(exports, require, module) {
       if (zoom > 3) {
         return 4;
       }
-      return 5;
+      if (zoom > 1) {
+        return 5;
+      }
+      return 6;
     };
 
     MapController.prototype._geojsonURL = function(tileInfo) {
-      var nw, nwPoint, se, sePoint, tilePoint, tileSize, url, zoom;
-      tileSize = tileInfo.tileSize;
-      tilePoint = L.point(tileInfo.x, tileInfo.y);
-      nwPoint = tilePoint.multiplyBy(tileSize);
-      sePoint = nwPoint.add(new L.Point(tileSize, tileSize));
-      nw = this.map.leafletMap.unproject(nwPoint);
-      se = this.map.leafletMap.unproject(sePoint);
-      zoom = tileInfo.z;
-      url = '&limit=' + this._getCurrentLimit(zoom, tileSize) + '&minmagnitude=' + this._getCurrentMag(zoom) + '&minlatitude=' + se.lat + '&maxlatitude=' + nw.lat + '&minlongitude=' + nw.lng + '&maxlongitude=' + se.lng + '&callback=' + tileInfo.requestId;
+      var bounds, nw, nwPoint, se, sePoint, tilePoint, tileSize, url, zoom;
+      if (tileInfo != null) {
+        tileSize = tileInfo.tileSize;
+        tilePoint = L.point(tileInfo.x, tileInfo.y);
+        nwPoint = tilePoint.multiplyBy(tileSize);
+        sePoint = nwPoint.add(new L.Point(tileSize, tileSize));
+        nw = this.map.leafletMap.unproject(nwPoint);
+        se = this.map.leafletMap.unproject(sePoint);
+        zoom = tileInfo.z;
+      } else {
+        bounds = this.map.leafletMap.getBounds();
+        if (this.map.parameters.nw != null) {
+          nw = this.map.parameters.nw;
+        } else if ((this.map.parameters.center != null) && (this.map.parameters.zoom != null)) {
+          nw = bounds.getNorthWest();
+        }
+        if (this.map.parameters.se != null) {
+          se = this.map.parameters.se;
+        } else if ((this.map.parameters.center != null) && (this.map.parameters.zoom != null)) {
+          se = bounds.getSouthEast();
+        }
+        tileSize = 256;
+        zoom = 0;
+      }
+      url = '&limit=' + this._getCurrentLimit(zoom, tileSize) + '&minmagnitude=' + this._getCurrentMag(zoom) + '&starttime=' + this.map.parameters.startdate + '&endtime=' + this.map.parameters.enddate;
+      if ((nw != null) && (se != null)) {
+        url += '&minlatitude=' + se.lat + '&maxlatitude=' + nw.lat + '&minlongitude=' + nw.lng + '&maxlongitude=' + se.lng;
+      }
+      if ((tileInfo != null ? tileInfo.requestId : void 0) != null) {
+        url += '&callback=' + tileInfo.requestId;
+      }
       return url;
     };
 
     MapController.prototype._updateSlider = function() {
-      $("#slider").slider("value", this.timeLine.progress() * this.map.values.timediff);
-      return $("#date").html(util.timeConverter((this.timeLine.progress() * this.map.values.timediff) + this.map.parameters.starttime));
+      $("#slider").val(Math.ceil(this.timeLine.progress() * this.map.values.timediff)).slider('refresh');
+      return $("#date").html(this.util.timeConverter((this.timeLine.progress() * this.map.values.timediff) + this.map.parameters.starttime));
     };
 
     MapController.prototype.initController = function() {
-      var geojsonTileLayer, hoverStyle, spinnerOpts, style, unhoverStyle;
+      var geojsonTileLayer, hoverStyle, loader, spinnerOpts, style, unhoverStyle;
       this.rainbow = new Rainbow();
       this.rainbow.setNumberRange(0, 700);
       this.timeLine = new TimelineLite({
@@ -1306,41 +1382,6 @@ require.define({"2D/map-controller": function(exports, require, module) {
       unhoverStyle = {
         "fillOpacity": 0.3
       };
-      geojsonTileLayer = new L.TileLayer.GeoJSONP('http://comcat.cr.usgs.gov/fdsnws/event/1/query?starttime=1900/1/1%0000:00:00&eventtype=earthquake&orderby=time&format=geojson{url_params}', {
-        url_params: (function(_this) {
-          return function(tileInfo) {
-            return _this._geojsonURL(tileInfo);
-          };
-        })(this),
-        clipTiles: false,
-        wrapPoints: false
-      }, {
-        pointToLayer: function(feature, latlng) {
-          return L.circleMarker(latlng, style);
-        },
-        style: style,
-        onEachFeature: (function(_this) {
-          return function(feature, layer) {
-            var depth;
-            depth = _this._getDepth(feature);
-            layer.setStyle({
-              radius: feature.properties.mag,
-              fillColor: "#" + _this.rainbow.colourAt(depth)
-            });
-            if (feature.properties != null) {
-              layer.bindPopup("Place: <b>" + feature.properties.place + "</b></br>Magnitude : <b>" + feature.properties.mag + "</b></br>Time : " + _this.util.timeConverter(feature.properties.time) + "</br>Depth : " + depth + " km");
-            }
-            if (!(layer instanceof L.Point)) {
-              layer.on('mouseover', function() {
-                return layer.setStyle(hoverStyle);
-              });
-              return layer.on('mouseout', function() {
-                return layer.setStyle(unhoverStyle);
-              });
-            }
-          };
-        })(this)
-      });
       spinnerOpts = {
         lines: 13,
         length: 10,
@@ -1351,17 +1392,112 @@ require.define({"2D/map-controller": function(exports, require, module) {
         color: '#cccccc',
         shadow: true
       };
-      geojsonTileLayer.on('loading', (function(_this) {
-        return function(event) {
-          return _this.map.leafletMap.spin(true, spinnerOpts);
-        };
-      })(this));
-      geojsonTileLayer.on('load', (function(_this) {
-        return function(event) {
-          return _this.map.leafletMap.spin(false);
-        };
-      })(this));
-      return geojsonTileLayer.addTo(this.map.leafletMap);
+      if (this.map.parameters.timeline) {
+        loader = new DataLoader();
+        return loader.load('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL()).then((function(_this) {
+          return function(results) {
+            var delay, feature, i, _i, _len, _ref;
+            _this.map.values.size = results.features.length;
+            _ref = results.features;
+            for (i = _i = 0, _len = _ref.length; _i < _len; i = ++_i) {
+              feature = _ref[i];
+              _this.map.earthquakes.circles[i] = L.geoJson(feature, {
+                pointToLayer: function(feature, latlng) {
+                  return L.circleMarker(latlng, style);
+                },
+                style: style,
+                onEachFeature: function(feature, layer) {
+                  var depth;
+                  depth = _this._getDepth(feature);
+                  layer.setStyle({
+                    radius: feature.properties.mag,
+                    fillColor: "#" + _this.rainbow.colourAt(depth)
+                  });
+                  if (feature.properties != null) {
+                    layer.bindPopup("Place: <b>" + feature.properties.place + "</b></br>Magnitude : <b>" + feature.properties.mag + "</b></br>Time : " + _this.util.timeConverter(feature.properties.time) + "</br>Depth : " + depth + " km");
+                  }
+                  if (!(layer instanceof L.Point)) {
+                    layer.on('mouseover', function() {
+                      return layer.setStyle(hoverStyle);
+                    });
+                    return layer.on('mouseout', function() {
+                      return layer.setStyle(unhoverStyle);
+                    });
+                  }
+                }
+              }, _this.map.earthquakes.time[i] = feature.properties.time, _this.map.earthquakes.depth[i] = feature.geometry.coordinates[2], delay = i === 0 ? 0 : 20 * ((feature.properties.time - results.features[i - 1].properties.time) / 1000000000), _this.timeLine.append(TweenLite.delayedCall(delay, (function(i) {
+                return _this.map.mapAdder(i);
+              }), [i.toString()])));
+            }
+            _this.map.values.timediff = results.features[_this.map.values.size - 1].properties.time - results.features[0].properties.time;
+            _this.map.parameters.starttime = results.features[0].properties.time;
+            $('#slider-wrapper').html("<input id='slider' name='slider' type='range' min='0' max='" + _this.map.values.timediff + "' value='0' step='1' style='display: none;'>");
+            $("#slider").slider({
+              slidestart: function(event) {
+                return _this.timeLine.pause();
+              },
+              slidestop: function(event) {
+                $("#date").html(_this.util.timeConverter(_this.map.parameters.starttime));
+                return _this.timeLine.progress($("#slider").val() / _this.map.values.timediff);
+              }
+            });
+            $("#info").html("</br></br>total earthquakes : " + _this.map.values.size + "</br>minimum depth : " + _this.map.values.mindepth + " km</br>maximum depth : " + _this.map.values.maxdepth + " km</br></br></br><div class='ui-body ui-body-a'><p><a href='http://github.com/gizmoabhinav/Seismic-Eruptions'>Link to the project</a></p></div>");
+            $("#startdate").html("Start date : " + _this.util.timeConverter(_this.map.parameters.startdate));
+            $("#enddate").html("End date : " + _this.util.timeConverter(_this.map.parameters.enddate));
+            $("#magcutoff").html("Cutoff magnitude : " + _this.map.parameters.mag);
+            if (_this.map.parameters.timeline) {
+              return _this.timeLine.resume();
+            }
+          };
+        })(this));
+      } else {
+        geojsonTileLayer = new L.TileLayer.GeoJSONP('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time&format=geojson{url_params}', {
+          url_params: (function(_this) {
+            return function(tileInfo) {
+              return _this._geojsonURL(tileInfo);
+            };
+          })(this),
+          clipTiles: false,
+          wrapPoints: false
+        }, {
+          pointToLayer: function(feature, latlng) {
+            return L.circleMarker(latlng, style);
+          },
+          style: style,
+          onEachFeature: (function(_this) {
+            return function(feature, layer) {
+              var depth;
+              depth = _this._getDepth(feature);
+              layer.setStyle({
+                radius: feature.properties.mag,
+                fillColor: "#" + _this.rainbow.colourAt(depth)
+              });
+              if (feature.properties != null) {
+                layer.bindPopup("Place: <b>" + feature.properties.place + "</b></br>Magnitude : <b>" + feature.properties.mag + "</b></br>Time : " + _this.util.timeConverter(feature.properties.time) + "</br>Depth : " + depth + " km");
+              }
+              if (!(layer instanceof L.Point)) {
+                layer.on('mouseover', function() {
+                  return layer.setStyle(hoverStyle);
+                });
+                return layer.on('mouseout', function() {
+                  return layer.setStyle(unhoverStyle);
+                });
+              }
+            };
+          })(this)
+        });
+        geojsonTileLayer.on('loading', (function(_this) {
+          return function(event) {
+            return _this.map.leafletMap.spin(true, spinnerOpts);
+          };
+        })(this));
+        geojsonTileLayer.on('load', (function(_this) {
+          return function(event) {
+            return _this.map.leafletMap.spin(false);
+          };
+        })(this));
+        return geojsonTileLayer.addTo(this.map.leafletMap);
+      }
     };
 
     return MapController;
@@ -1384,31 +1520,39 @@ require.define({"2D/map": function(exports, require, module) {
   util = require('common/util');
 
   Map = (function() {
-    function Map() {}
+    var p;
+
+    function Map() {
+      var d, _base, _base1;
+      d = new Date();
+      if (this.parameters.startdate == null) {
+        this.parameters.startdate = "1900/1/1";
+      }
+      if (this.parameters.enddate == null) {
+        this.parameters.enddate = d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+      }
+      this.parameters.timeline = (this.parameters.timeline != null) || false;
+      if (!((this.parameters.center != null) && this.parameters.zoom)) {
+        (_base = this.parameters).nw || (_base.nw = L.latLng(50, -40));
+        (_base1 = this.parameters).se || (_base1.se = L.latLng(-20, 40));
+      }
+    }
 
     Map.prototype.leafletMap = L.map('map', {
       worldCopyJump: true
     });
 
-    Map.prototype.crossSection = {};
+    Map.prototype.crossSection = null;
 
     Map.prototype.parameters = {
-      mag: util.getURLParameter("mag"),
+      desiredMag: util.getURLParameter("mag"),
       startdate: util.getURLParameter("startdate"),
       enddate: util.getURLParameter("enddate"),
-      defaultInit: function() {
-        var d;
-        d = new Date();
-        if (this.mag == null) {
-          this.mag = 5;
-        }
-        if (this.startdate == null) {
-          this.startdate = "2009/1/1";
-        }
-        if (this.enddate == null) {
-          return this.enddate = d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
-        }
-      }
+      nw: (p = util.getURLParameter('nw')) ? L.latLng.apply(L, p.split(',')) : null,
+      se: (p = util.getURLParameter('se')) ? L.latLng.apply(L, p.split(',')) : null,
+      center: (p = util.getURLParameter('center')) ? L.latLng.apply(L, p.split(',')) : null,
+      zoom: util.getURLParameter("zoom"),
+      timeline: util.getURLParameter('timeline')
     };
 
     Map.prototype.values = {
@@ -1436,8 +1580,6 @@ require.define({"2D/map": function(exports, require, module) {
 
     Map.prototype.array = [];
 
-    Map.prototype.editing = false;
-
     Map.prototype.plateBoundaries = new L.KML("plates.kml", {
       async: true
     });
@@ -1456,7 +1598,7 @@ require.define({"2D/map": function(exports, require, module) {
       }
       this.earthquakes.circles[i].setStyle({
         fillOpacity: 0.5,
-        fillColor: "#" + rainbow.colourAt(this.earthquakes.depth[i])
+        fillColor: "#" + this.controller.rainbow.colourAt(this.earthquakes.depth[i])
       });
       i++;
       while (this.leafletMap.hasLayer(this.earthquakes.circles[i])) {
@@ -1475,9 +1617,6 @@ require.define({"2D/map": function(exports, require, module) {
 
     Map.prototype.render = function() {
       var pts;
-      if (this.editing) {
-        this.editsave();
-      }
       pts = this.crossSection.points;
       if (pts.length === 4) {
         return this.render3DFrame("../3D/index.html?x1=" + pts[0].lng + "&y1=" + pts[0].lat + "&x2=" + pts[1].lng + "&y2=" + pts[1].lat + "&x3=" + pts[2].lng + "&y3=" + pts[2].lat + "&x4=" + pts[3].lng + "&y4=" + pts[3].lat + "&mag=" + this.parameters.mag + "&startdate=" + this.parameters.startdate + "&enddate=" + this.parameters.enddate);
@@ -1496,27 +1635,16 @@ require.define({"2D/map": function(exports, require, module) {
     };
 
     Map.prototype.startdrawing = function() {
-      if (this.editing) {
-        alert("Save edit before drawing a new cross-section");
+      if (this.crossSection != null) {
+        alert("Click done on the current cross-section before drawing a new cross-section");
         return;
       }
       return this.crossSection = new CrossSection(this.leafletMap);
     };
 
-    Map.prototype.editdrawing = function() {
-      this.editing = true;
-      return this.crossSection.editAddHooks();
-    };
-
-    Map.prototype.editsave = function() {
-      this.editing = false;
-      return this.crossSection.editRemoveHooks();
-    };
-
     Map.prototype.backtonormalview = function() {
-      this.editing = false;
-      this.crossSection.editRemoveHooks();
-      return this.crossSection.removeCrossSection();
+      this.crossSection.destroy();
+      return this.crossSection = null;
     };
 
     return Map;
@@ -1535,10 +1663,7 @@ require.define({"common/data-loader": function(exports, require, module) {
   var DataLoader;
 
   DataLoader = (function() {
-    function DataLoader(map) {
-      this.map = map;
-      void 0;
-    }
+    function DataLoader() {}
 
     DataLoader.prototype.load = function(url) {
       return new Promise((function(_this) {
