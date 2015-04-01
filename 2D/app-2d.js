@@ -100,6 +100,7 @@ require.define({"2D/app": function(exports, require, module) {
 
   App = (function() {
     function App() {
+      this.util = require('common/util');
       this.map = new Map();
       this.controller = new MapController(this.map);
       $("#index").on("pageshow", (function(_this) {
@@ -116,15 +117,16 @@ require.define({"2D/app": function(exports, require, module) {
           _this.controller.timeLine.timeScale(_this.controller.speed);
           _this.controller.timeLine.pause();
           $.mobile.loading('hide');
-          return setTimeout(function() {
+          setTimeout(function() {
             return _this.map.leafletMap.invalidateSize();
           }, 1);
+          return _this.init();
         };
       })(this));
     }
 
     App.prototype.init = function() {
-      var drawingMode, elem, formatDate, maxSelected, minSelected, removeDrawingTool, startDrawingTool;
+      var drawingMode, elem, maxSelected, minSelected, removeDrawingTool, startDrawingTool, updateShareLink;
       $('#play').click((function(_this) {
         return function() {
           return _this.controller.timeLine.resume();
@@ -164,6 +166,9 @@ require.define({"2D/app": function(exports, require, module) {
           return _this.controller.timeLine.pause();
         };
       })(this));
+      if (this.map.parameters.timeline) {
+        $('#options-button').attr('href', '#options-details');
+      }
       $('#daterange').dateRangeSlider({
         arrows: false,
         bounds: {
@@ -171,8 +176,8 @@ require.define({"2D/app": function(exports, require, module) {
           max: Date.now()
         },
         defaultValues: {
-          min: new Date(1900, 0, 1),
-          max: Date.now()
+          min: new Date(this.map.parameters.startdate),
+          max: new Date(this.map.parameters.enddate)
         },
         scales: [
           {
@@ -187,6 +192,7 @@ require.define({"2D/app": function(exports, require, module) {
           }
         ]
       });
+      $('#magnitude-slider').val(this.map.parameters.desiredMag || this.map.parameters.mag).slider('refresh');
       $.datepicker.setDefaults({
         minDate: new Date(1900, 0, 1),
         maxDate: 0,
@@ -211,9 +217,20 @@ require.define({"2D/app": function(exports, require, module) {
       $('.ui-rangeSlider-rightLabel').click(function(evt) {
         return $('.ui-rangeSlider-rightLabel').datepicker('dialog', $('#daterange').dateRangeSlider('values').max, maxSelected, {}, evt);
       });
-      formatDate = function(date) {
-        return date.getFullYear() + '/' + (date.getMonth() + 1) + '/' + date.getDate();
-      };
+      updateShareLink = (function(_this) {
+        return function() {
+          var query, range, url;
+          range = $('#daterange').dateRangeSlider('values');
+          query = _this.util.queryString(_this.map, {
+            startdate: _this.util.usgsDate(range.min),
+            enddate: _this.util.usgsDate(range.max),
+            mag: $('#magnitude-slider').val()
+          });
+          url = window.location.origin + window.location.pathname + query;
+          $('#share-link').attr("href", url);
+          return $('#share-link').text(url);
+        };
+      })(this);
       elem = null;
       $('#getQuakeCount').click((function(_this) {
         return function() {
@@ -221,48 +238,71 @@ require.define({"2D/app": function(exports, require, module) {
           $(_this).addClass('ui-disabled');
           $('#quake-count').html("Earthquakes: ???");
           range = $('#daterange').dateRangeSlider('values');
-          starttime = formatDate(range.min);
-          endtime = formatDate(range.max);
+          starttime = _this.util.usgsDate(range.min);
+          endtime = _this.util.usgsDate(range.max);
           elem = document.createElement('script');
           elem.src = 'http://comcat.cr.usgs.gov/fdsnws/event/1/count?starttime=' + starttime + '&endtime=' + endtime + '&eventtype=earthquake&format=geojson' + _this.geojsonParams();
           elem.id = 'quake-count-script';
-          return document.body.appendChild(elem);
+          document.body.appendChild(elem);
+          return updateShareLink();
         };
       })(this));
       window.updateQuakeCount = function(result) {
-        var velem;
         $('#quake-count').html("Earthquakes: " + result.count);
-        velem = document.getElementById('quake-count-script');
+        elem = document.getElementById('quake-count-script');
         document.body.removeChild(elem);
         return $('#getQuakeCount').removeClass('ui-disabled');
       };
-      $('#index').click(function() {
-        $('#playcontrols').fadeIn();
-        $('#slider-wrapper').fadeIn();
-        $('#date').fadeIn();
-        setTimeout(function() {
-          return $('#playcontrols').fadeOut();
-        }, 5000);
-        return setTimeout(function() {
-          $('#slider-wrapper').fadeOut();
-          return $('#date').fadeOut();
-        }, 12000);
+      $('#loadSelectedData').click((function(_this) {
+        return function() {
+          var range;
+          range = $('#daterange').dateRangeSlider('values');
+          _this.map.parameters.startdate = _this.util.usgsDate(range.min);
+          _this.map.parameters.enddate = _this.util.usgsDate(range.max);
+          _this.map.parameters.desiredMag = $('#magnitude-slider').val();
+          _this.controller.reloadData();
+          history.pushState({
+            mapParams: _this.map.parameters
+          }, 'Seismic Eruptions', _this.util.queryString(_this.map));
+          return updateShareLink();
+        };
+      })(this));
+      $('#share-wrapper').hide();
+      $('#shareSelectedData').click(function() {
+        updateShareLink();
+        return $('#share-wrapper').show();
       });
-      $('#playback').hover(function() {
-        $('#playcontrols').fadeIn();
-        $('#slider-wrapper').fadeIn();
-        $('#date').fadeIn();
-        return setTimeout(function() {
+      if (this.map.parameters.timeline) {
+        $('#index').click(function() {
+          $('#playcontrols').fadeIn();
+          $('#slider-wrapper').fadeIn();
+          $('#date').fadeIn();
+          setTimeout(function() {
+            return $('#playcontrols').fadeOut();
+          }, 5000);
+          return setTimeout(function() {
+            $('#slider-wrapper').fadeOut();
+            return $('#date').fadeOut();
+          }, 12000);
+        });
+        $('#playback').hover(function() {
+          $('#playcontrols').fadeIn();
+          $('#slider-wrapper').fadeIn();
+          $('#date').fadeIn();
+          return setTimeout(function() {
+            $('#slider-wrapper').fadeOut();
+            $('#date').fadeOut();
+            return $('#playcontrols').fadeOut();
+          }, 8000);
+        });
+        setTimeout(function() {
           $('#slider-wrapper').fadeOut();
           $('#date').fadeOut();
           return $('#playcontrols').fadeOut();
-        }, 8000);
-      });
-      setTimeout(function() {
-        $('#slider-wrapper').fadeOut();
-        $('#date').fadeOut();
-        return $('#playcontrols').fadeOut();
-      }, 10000);
+        }, 10000);
+      } else {
+        $('#playback').fadeOut();
+      }
       drawingMode = false;
       $('#drawingTool').click((function(_this) {
         return function() {
@@ -290,7 +330,9 @@ require.define({"2D/app": function(exports, require, module) {
         return function() {
           if (drawingMode) {
             $.mobile.loading('show');
-            $('#playback').fadeIn();
+            if (_this.map.parameters.timeline) {
+              $('#playback').fadeIn();
+            }
             $('#crosssection').fadeOut();
             $.mobile.loading('hide');
             drawingMode = false;
@@ -1294,7 +1336,10 @@ require.define({"2D/map-controller": function(exports, require, module) {
     MapController.prototype._getCurrentMag = function(zoom) {
       var mag;
       mag = this._getDesiredMag(zoom);
-      this.map.parameters.mag = mag;
+      if (this.map.parameters.mag !== mag) {
+        this.map.parameters.mag = mag;
+        $('#magnitude-slider').val(mag).slider('refresh');
+      }
       return mag;
     };
 
@@ -1358,7 +1403,7 @@ require.define({"2D/map-controller": function(exports, require, module) {
     };
 
     MapController.prototype.initController = function() {
-      var geojsonTileLayer, hoverStyle, loader, promise, spinnerOpts, style, unhoverStyle;
+      var hoverStyle, spinnerOpts, style, unhoverStyle;
       this.rainbow = new Rainbow();
       this.rainbow.setNumberRange(0, 700);
       this.timeLine = new TimelineLite({
@@ -1393,76 +1438,9 @@ require.define({"2D/map-controller": function(exports, require, module) {
         shadow: true
       };
       if (this.map.parameters.timeline) {
-        loader = new DataLoader();
-        if (this.map.parameters.data != null) {
-          promise = loader.load(this.map.parameters.data, {
-            ajax: true
-          });
-        } else if ((this.map.parameters.datap != null) && (this.map.parameters.datap_callback != null)) {
-          promise = loader.load(this.map.parameters.datap, {
-            callback: this.map.parameters.datap_callback
-          });
-        } else {
-          promise = loader.load('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL());
-        }
-        return promise.then((function(_this) {
-          return function(results) {
-            var delay, feature, i, _i, _len, _ref;
-            _this.map.values.size = results.features.length;
-            _ref = results.features;
-            for (i = _i = 0, _len = _ref.length; _i < _len; i = ++_i) {
-              feature = _ref[i];
-              _this.map.earthquakes.circles[i] = L.geoJson(feature, {
-                pointToLayer: function(feature, latlng) {
-                  return L.circleMarker(latlng, style);
-                },
-                style: style,
-                onEachFeature: function(feature, layer) {
-                  var depth;
-                  depth = _this._getDepth(feature);
-                  layer.setStyle({
-                    radius: feature.properties.mag,
-                    fillColor: "#" + _this.rainbow.colourAt(depth)
-                  });
-                  if (feature.properties != null) {
-                    layer.bindPopup("Place: <b>" + feature.properties.place + "</b></br>Magnitude : <b>" + feature.properties.mag + "</b></br>Time : " + _this.util.timeConverter(feature.properties.time) + "</br>Depth : " + depth + " km");
-                  }
-                  if (!(layer instanceof L.Point)) {
-                    layer.on('mouseover', function() {
-                      return layer.setStyle(hoverStyle);
-                    });
-                    return layer.on('mouseout', function() {
-                      return layer.setStyle(unhoverStyle);
-                    });
-                  }
-                }
-              }, _this.map.earthquakes.time[i] = feature.properties.time, _this.map.earthquakes.depth[i] = feature.geometry.coordinates[2], delay = i === 0 ? 0 : 20 * ((feature.properties.time - results.features[i - 1].properties.time) / 1000000000), _this.timeLine.append(TweenLite.delayedCall(delay, (function(i) {
-                return _this.map.mapAdder(i);
-              }), [i.toString()])));
-            }
-            _this.map.values.timediff = results.features[_this.map.values.size - 1].properties.time - results.features[0].properties.time;
-            _this.map.parameters.starttime = results.features[0].properties.time;
-            $('#slider-wrapper').html("<input id='slider' name='slider' type='range' min='0' max='" + _this.map.values.timediff + "' value='0' step='1' style='display: none;'>");
-            $("#slider").slider({
-              slidestart: function(event) {
-                return _this.timeLine.pause();
-              },
-              slidestop: function(event) {
-                $("#date").html(_this.util.timeConverter(_this.map.parameters.starttime));
-                return _this.timeLine.progress($("#slider").val() / _this.map.values.timediff);
-              }
-            });
-            $("#info").html("</br></br>total earthquakes : " + _this.map.values.size + "</br>minimum depth : " + _this.map.values.mindepth + " km</br>maximum depth : " + _this.map.values.maxdepth + " km</br></br></br><div class='ui-body ui-body-a'><p><a href='http://github.com/gizmoabhinav/Seismic-Eruptions'>Link to the project</a></p></div>");
-            $("#startdate").html("Start date : " + _this.util.timeConverter(_this.map.parameters.startdate));
-            $("#enddate").html("End date : " + _this.util.timeConverter(_this.map.parameters.enddate));
-            $("#magcutoff").html("Cutoff magnitude : " + _this.map.parameters.mag);
-            if (_this.map.parameters.timeline) {
-              return _this.timeLine.resume();
-            }
-          };
-        })(this));
+        return this._loadStaticData(style, hoverStyle, unhoverStyle, spinnerOpts);
       } else {
-        geojsonTileLayer = new L.TileLayer.GeoJSONP('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time&format=geojson{url_params}', {
+        this.geojsonTileLayer = new L.TileLayer.GeoJSONP('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time&format=geojson{url_params}', {
           url_params: (function(_this) {
             return function(tileInfo) {
               return _this._geojsonURL(tileInfo);
@@ -1497,18 +1475,111 @@ require.define({"2D/map-controller": function(exports, require, module) {
             };
           })(this)
         });
-        geojsonTileLayer.on('loading', (function(_this) {
+        this.geojsonTileLayer.on('loading', (function(_this) {
           return function(event) {
             return _this.map.leafletMap.spin(true, spinnerOpts);
           };
         })(this));
-        geojsonTileLayer.on('load', (function(_this) {
+        this.geojsonTileLayer.on('load', (function(_this) {
           return function(event) {
             return _this.map.leafletMap.spin(false);
           };
         })(this));
-        return geojsonTileLayer.addTo(this.map.leafletMap);
+        return this.geojsonTileLayer.addTo(this.map.leafletMap);
       }
+    };
+
+    MapController.prototype.reloadData = function() {
+      var circle, _i, _len, _ref;
+      if (this.map.parameters.timeline) {
+        this.timeLine.pause();
+        _ref = this.map.earthquakes.circles;
+        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+          circle = _ref[_i];
+          if (this.map.leafletMap.hasLayer(circle)) {
+            this.map.leafletMap.removeLayer(circle);
+          }
+        }
+        this.map.earthquakes.circles = [];
+        this.map.earthquakes.time = [];
+        this.map.earthquakes.depth = [];
+        return this._loadStaticData();
+      } else {
+        return this.geojsonTileLayer.redraw();
+      }
+    };
+
+    MapController.prototype._loadStaticData = function(style, hoverStyle, unhoverStyle, spinnerOpts) {
+      var loader, promise;
+      this.timeLine.pause();
+      loader = new DataLoader();
+      if (this.map.parameters.data != null) {
+        promise = loader.load(this.map.parameters.data, {
+          ajax: true
+        });
+      } else if ((this.map.parameters.datap != null) && (this.map.parameters.datap_callback != null)) {
+        promise = loader.load(this.map.parameters.datap, {
+          callback: this.map.parameters.datap_callback
+        });
+      } else {
+        promise = loader.load('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL());
+      }
+      return promise.then((function(_this) {
+        return function(results) {
+          var delay, feature, i, _i, _len, _ref;
+          _this.map.values.size = results.features.length;
+          _ref = results.features;
+          for (i = _i = 0, _len = _ref.length; _i < _len; i = ++_i) {
+            feature = _ref[i];
+            _this.map.earthquakes.circles[i] = L.geoJson(feature, {
+              pointToLayer: function(feature, latlng) {
+                return L.circleMarker(latlng, style);
+              },
+              style: style,
+              onEachFeature: function(feature, layer) {
+                var depth;
+                depth = _this._getDepth(feature);
+                layer.setStyle({
+                  radius: feature.properties.mag,
+                  fillColor: "#" + _this.rainbow.colourAt(depth)
+                });
+                if (feature.properties != null) {
+                  layer.bindPopup("Place: <b>" + feature.properties.place + "</b></br>Magnitude : <b>" + feature.properties.mag + "</b></br>Time : " + _this.util.timeConverter(feature.properties.time) + "</br>Depth : " + depth + " km");
+                }
+                if (!(layer instanceof L.Point)) {
+                  layer.on('mouseover', function() {
+                    return layer.setStyle(hoverStyle);
+                  });
+                  return layer.on('mouseout', function() {
+                    return layer.setStyle(unhoverStyle);
+                  });
+                }
+              }
+            }, _this.map.earthquakes.time[i] = feature.properties.time, _this.map.earthquakes.depth[i] = feature.geometry.coordinates[2], delay = i === 0 ? 0 : 20 * ((feature.properties.time - results.features[i - 1].properties.time) / 1000000000), _this.timeLine.append(TweenLite.delayedCall(delay, (function(i) {
+              return _this.map.mapAdder(i);
+            }), [i.toString()])));
+          }
+          if (_this.map.values.size > 0) {
+            _this.map.values.timediff = results.features[_this.map.values.size - 1].properties.time - results.features[0].properties.time;
+            _this.map.parameters.starttime = results.features[0].properties.time;
+            $('#slider-wrapper').html("<input id='slider' name='slider' type='range' min='0' max='" + _this.map.values.timediff + "' value='0' step='1' style='display: none;' data-theme='a' data-track-theme='a'>");
+            $("#slider").slider({
+              slidestart: function(event) {
+                return _this.timeLine.pause();
+              },
+              slidestop: function(event) {
+                $("#date").html(_this.util.timeConverter(_this.map.parameters.starttime));
+                return _this.timeLine.progress($("#slider").val() / _this.map.values.timediff);
+              }
+            });
+            $("#info").html("<p>total earthquakes : " + _this.map.values.size + "<br/>minimum depth : " + Math.min.apply(null, _this.map.earthquakes.depth) + " km" + "</br>maximum depth : " + Math.max.apply(null, _this.map.earthquakes.depth) + " km</p>" + "<div class='ui-body ui-body-a'><p><a href='http://github.com/gizmoabhinav/Seismic-Eruptions'>Link to the project</a></p></div>");
+            $("#startdate").html("Start date : " + _this.util.timeConverter(_this.map.parameters.startdate));
+            $("#enddate").html("End date : " + _this.util.timeConverter(_this.map.parameters.enddate));
+            $("#magcutoff").html("Cutoff magnitude : " + _this.map.parameters.mag);
+            return _this.timeLine.resume();
+          }
+        };
+      })(this));
     };
 
     return MapController;
@@ -1738,7 +1809,8 @@ require.define({"common/data-loader": function(exports, require, module) {
 
 require.define({"common/util": function(exports, require, module) {
   (function() {
-  var Util;
+  var Util,
+    __hasProp = {}.hasOwnProperty;
 
   Util = (function() {
     function Util() {}
@@ -1783,6 +1855,34 @@ require.define({"common/util": function(exports, require, module) {
       date = a.getDate();
       time = year + ' ' + month + ' ' + date;
       return time;
+    };
+
+    Util.prototype.usgsDate = function(date) {
+      return date.getFullYear() + '/' + (date.getMonth() + 1) + '/' + date.getDate();
+    };
+
+    Util.prototype.queryString = function(map, overrides) {
+      var center, key, params, value;
+      if (overrides == null) {
+        overrides = {};
+      }
+      center = map.leafletMap.getCenter();
+      params = {
+        zoom: map.leafletMap.getZoom(),
+        center: "" + center.lat + "," + center.lng,
+        mag: map.parameters.desiredMag,
+        startdate: map.parameters.startdate,
+        enddate: map.parameters.enddate
+      };
+      if (map.parameters.timeline) {
+        params.timeline = true;
+      }
+      for (key in overrides) {
+        if (!__hasProp.call(overrides, key)) continue;
+        value = overrides[key];
+        params[key] = value;
+      }
+      return '?' + $.param(params);
     };
 
     return Util;

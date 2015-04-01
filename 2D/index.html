@@ -39,6 +39,12 @@
     </style>
 
     <script type="text/javascript" src="//code.jquery.com/jquery-1.10.2.min.js"></script>
+    <script type="text/javascript">
+      $(document).bind("mobileinit", function(){
+        $.mobile.hashListeningEnabled = false;
+        $.mobile.pushStateEnabled = false;
+      });
+    </script>
     <script type="text/javascript" src="//code.jquery.com/ui/1.10.3/jquery-ui.js"></script>
     <script type="text/javascript" src="//code.jquery.com/mobile/1.4.2/jquery.mobile-1.4.2.min.js"></script>
     <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/jquery-mousewheel/3.1.12/jquery.mousewheel.min.js"></script>
@@ -54,18 +60,26 @@
     <div data-role="page" id="index">
       <div data-theme="b" data-role="header">
         <h1>Seismic Eruptions</h1>
-        <a href="#options" data-rel='popup' data-transition="slidedown" class="ui-btn ui-icon-info ui-mini ui-btn-icon-notext ui-corner-all">Options</a>
+        <a href="#options-quake-count" data-rel='popup' data-transition="slidedown" class="ui-btn ui-icon-info ui-mini ui-btn-icon-notext ui-corner-all" id='options-button'>Options</a>
         <div data-role="controlgroup" data-type="horizontal" class="ui-mini ui-btn-right">
           <a href="#" class="ui-btn ui-btn-b ui-icon-knife ui-mini ui-btn-icon-notext ui-corner-all" id="drawingTool" onclick="app.map.startdrawing()">Draw Cross-Section</a>
           <a href="#settings" class="ui-btn ui-icon-gear ui-mini ui-btn-icon-notext ui-corner-all">Settings</a>
         </div>
       </div>
-      <div data-role="popup" data-theme="b" class='ui-content' id="options">
+      <div data-role="panel" data-theme="b" data-display="overlay" id="options-details">
+        <div id="info" class="ui-bar ui-body-b"></div>
+        <div class="ui-bar ui-body-b">
+          <p id="startdate"></p>
+          <p id="enddate"></p>
+          <p id="magcutoff"></p>
+        </div>
+      </div>
+      <div data-role="popup" data-theme="b" class='ui-content' id="options-quake-count">
         <div class="ui-body ui-body-b" style="min-width: 400px; min-height: 300px; overflow: visible;">
           <div data-theme="b" data-role="header">
             Check Quake Count
           </div>
-          <div class="ui-bar ui-bar-a" id="quake-count"></div>
+          <div class="ui-bar ui-bar-a" id="quake-count">Earthquakes: ???</div>
           <div style="padding:10px 20px;" data-theme="b">
             <div id="daterange"></div>
             <div id="daterange-picker-left" style="float: left; display: none;"></div>
@@ -74,7 +88,15 @@
               <label for='magnitude-slider'>Magnitude cutoff:</label>
               <input id="magnitude-slider" name="magnitude-slider" type="range" min="1" max="9" value="5" step="0.1" >
             </div>
-            <a href="#" class="ui-btn ui-btn-b ui-btn-inline ui-shadow ui-corner-all ui-mini ui-icon-check ui-btn-icon-right" id="getQuakeCount"> Get Count </a>
+            <a href="#" class="ui-btn ui-btn-b ui-btn-inline ui-shadow ui-corner-all ui-mini ui-icon-search ui-btn-icon-right" id="getQuakeCount"> Get Count </a>
+            <a href="#" class="ui-btn ui-btn-b ui-btn-inline ui-shadow ui-corner-all ui-mini ui-icon-forward ui-btn-icon-right" id="loadSelectedData"> Show Me </a>
+            <a href="#" class="ui-btn ui-btn-b ui-btn-inline ui-shadow ui-corner-all ui-mini ui-icon-action ui-btn-icon-right" id="shareSelectedData"> Share </a>
+          </div>
+          <div id="share-wrapper" data-mini="true">
+            <h6>
+              Give this link to share:<br/>
+              <a id="share-link" href='#' target='_blank' style='word-break: break-word; -webkit-hyphens: auto; -moz-hyphens: auto; hyphens: auto;'></a>
+            </h6>
           </div>
         </div>
       </div>
@@ -118,8 +140,6 @@
     <script  type="text/javascript">
       var App = require('2D/app'),
           app = new App(); // some comment
-
-      app.init();
     </script>
   </body>
 </html>

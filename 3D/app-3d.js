@@ -614,7 +614,8 @@ require.define({"common/data-loader": function(exports, require, module) {
 
 require.define({"common/util": function(exports, require, module) {
   (function() {
-  var Util;
+  var Util,
+    __hasProp = {}.hasOwnProperty;
 
   Util = (function() {
     function Util() {}
@@ -659,6 +660,34 @@ require.define({"common/util": function(exports, require, module) {
       date = a.getDate();
       time = year + ' ' + month + ' ' + date;
       return time;
+    };
+
+    Util.prototype.usgsDate = function(date) {
+      return date.getFullYear() + '/' + (date.getMonth() + 1) + '/' + date.getDate();
+    };
+
+    Util.prototype.queryString = function(map, overrides) {
+      var center, key, params, value;
+      if (overrides == null) {
+        overrides = {};
+      }
+      center = map.leafletMap.getCenter();
+      params = {
+        zoom: map.leafletMap.getZoom(),
+        center: "" + center.lat + "," + center.lng,
+        mag: map.parameters.desiredMag,
+        startdate: map.parameters.startdate,
+        enddate: map.parameters.enddate
+      };
+      if (map.parameters.timeline) {
+        params.timeline = true;
+      }
+      for (key in overrides) {
+        if (!__hasProp.call(overrides, key)) continue;
+        value = overrides[key];
+        params[key] = value;
+      }
+      return '?' + $.param(params);
     };
 
     return Util;
