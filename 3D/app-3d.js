@@ -154,7 +154,7 @@ Main = (function() {
       });
     };
     loader = new DataLoader();
-    url = 'http://comcat.cr.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time-asc' + '&starttime=' + this.util.getURLParameter("startdate") + 'T00:00:00' + '&endtime=' + this.util.getURLParameter("enddate") + 'T23:59:59' + '&minmagnitude=' + this.util.getURLParameter("mag") + '&minlatitude=' + Math.min(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&maxlatitude=' + Math.max(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&minlongitude=' + Math.min(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4) + '&maxlongitude=' + Math.max(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4);
+    url = 'http://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time-asc' + '&starttime=' + this.util.getURLParameter("startdate") + 'T00:00:00' + '&endtime=' + this.util.getURLParameter("enddate") + 'T23:59:59' + '&minmagnitude=' + this.util.getURLParameter("mag") + '&minlatitude=' + Math.min(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&maxlatitude=' + Math.max(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&minlongitude=' + Math.min(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4) + '&maxlongitude=' + Math.max(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4);
     return loader.load(url).then((function(_this) {
       return function(results) {
         var feature, size, _i, _len, _ref;
@@ -269,7 +269,7 @@ Plot = (function() {
     this.maxmag = 0;
     this.minmag = 999;
     loader = new DataLoader();
-    url = 'http://comcat.cr.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time-asc' + '&minmagnitude=' + this.mag + '&starttime=' + this.startdate + '%2000:00:00' + '&endtime=' + this.enddate + '%2023:59:59' + '&minlatitude=' + Math.min(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&maxlatitude=' + Math.max(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&minlongitude=' + Math.min(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4) + '&maxlongitude=' + Math.max(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4);
+    url = 'http://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time-asc' + '&minmagnitude=' + this.mag + '&starttime=' + this.startdate + '%2000:00:00' + '&endtime=' + this.enddate + '%2023:59:59' + '&minlatitude=' + Math.min(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&maxlatitude=' + Math.max(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&minlongitude=' + Math.min(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4) + '&maxlongitude=' + Math.max(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4);
     loader.load(url).then((function(_this) {
       return function(results) {
         var box, feature, line, lines, mesh, rectmaterial, size, vertex1, vertex2, vertex3, vertex4, vertex5, vertex6, vertex7, vertex8, _i, _len, _ref;

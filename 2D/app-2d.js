@@ -259,7 +259,7 @@ App = (function() {
         starttime = _this.util.usgsDate(range.min);
         endtime = _this.util.usgsDate(range.max);
         elem = document.createElement('script');
-        elem.src = 'http://comcat.cr.usgs.gov/fdsnws/event/1/count?starttime=' + starttime + '&endtime=' + endtime + '&eventtype=earthquake&format=geojson' + _this.geojsonParams();
+        elem.src = 'http://earthquake.usgs.gov/fdsnws/event/1/count?starttime=' + starttime + '&endtime=' + endtime + '&eventtype=earthquake&format=geojson' + _this.geojsonParams();
         elem.id = 'quake-count-script';
         document.body.appendChild(elem);
         return updateShareLink();
@@ -1408,12 +1408,23 @@ MapController = (function() {
     return $("#date").html(this.util.timeConverter((this.timeLine.progress() * this.map.values.timediff) + this.map.parameters.starttime));
   };
 
-  MapController.prototype._markerMaker = function(style) {
+  MapController.prototype._markerStyle = {
+    clickable: true,
+    color: "#000",
+    fillColor: "#00D",
+    weight: 1,
+    opacity: 1,
+    fillOpacity: 0.3
+  };
+
+  MapController.prototype._markerCreator = function() {
     return {
-      pointToLayer: function(feature, latlng) {
-        return L.circleMarker(latlng, style);
-      },
-      style: style,
+      pointToLayer: (function(_this) {
+        return function(feature, latlng) {
+          return L.circleMarker(latlng, _this._markerStyle);
+        };
+      })(this),
+      style: this._markerStyle,
       onEachFeature: (function(_this) {
         return function(feature, layer) {
           var depth;
@@ -1427,10 +1438,14 @@ MapController = (function() {
           }
           if (!(layer instanceof L.Point)) {
             layer.on('mouseover', function() {
-              return layer.setStyle(hoverStyle);
+              return layer.setStyle({
+                fillOpacity: 1.0
+              });
             });
             return layer.on('mouseout', function() {
-              return layer.setStyle(unhoverStyle);
+              return layer.setStyle({
+                fillOpacity: 0.3
+              });
             });
           }
         };
@@ -1439,7 +1454,7 @@ MapController = (function() {
   };
 
   MapController.prototype.initController = function() {
-    var hoverStyle, spinnerOpts, style, unhoverStyle;
+    var spinnerOpts;
     this.rainbow = new Rainbow();
     this.rainbow.setNumberRange(0, 700);
     this.timeLine = new TimelineLite({
@@ -1449,20 +1464,6 @@ MapController = (function() {
         };
       })(this)
     });
-    style = {
-      "clickable": true,
-      "color": "#000",
-      "fillColor": "#00D",
-      weight: 1,
-      opacity: 1,
-      fillOpacity: 0.3
-    };
-    hoverStyle = {
-      "fillOpacity": 1.0
-    };
-    unhoverStyle = {
-      "fillOpacity": 0.3
-    };
     spinnerOpts = {
       lines: 13,
       length: 10,
@@ -1474,9 +1475,9 @@ MapController = (function() {
       shadow: true
     };
     if (this.map.parameters.timeline) {
-      return this._loadStaticData(style, hoverStyle, unhoverStyle, spinnerOpts);
+      return this._loadStaticData(spinnerOpts);
     } else {
-      this.geojsonTileLayer = new L.TileLayer.GeoJSONP('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time&format=geojson{url_params}', {
+      this.geojsonTileLayer = new L.TileLayer.GeoJSONP('http://earthquake.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time&format=geojson{url_params}', {
         url_params: (function(_this) {
           return function(tileInfo) {
             return _this._geojsonURL(tileInfo);
@@ -1484,7 +1485,7 @@ MapController = (function() {
         })(this),
         clipTiles: false,
         wrapPoints: false
-      }, this._markerMaker(style));
+      }, this._markerCreator());
       this.geojsonTileLayer.on('loading', (function(_this) {
         return function(event) {
           return _this.map.leafletMap.spin(true, spinnerOpts);
@@ -1519,7 +1520,7 @@ MapController = (function() {
     }
   };
 
-  MapController.prototype._loadStaticData = function(style, hoverStyle, unhoverStyle, spinnerOpts) {
+  MapController.prototype._loadStaticData = function(spinnerOpts) {
     var loader, promise;
     this.timeLine.pause();
     loader = new DataLoader();
@@ -1532,7 +1533,7 @@ MapController = (function() {
         callback: this.map.parameters.datap_callback
       });
     } else {
-      promise = loader.load('http://comcat.cr.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL());
+      promise = loader.load('http://earthquake.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL());
     }
     return promise.then((function(_this) {
       return function(results) {
@@ -1541,7 +1542,7 @@ MapController = (function() {
         _ref = results.features;
         for (i = _i = 0, _len = _ref.length; _i < _len; i = ++_i) {
           feature = _ref[i];
-          _this.map.earthquakes.circles[i] = L.geoJson(feature, _this._markerMaker(style));
+          _this.map.earthquakes.circles[i] = L.geoJson(feature, _this._markerCreator());
           _this.map.earthquakes.time[i] = feature.properties.time;
           _this.map.earthquakes.depth[i] = feature.geometry.coordinates[2];
           delay = i === 0 ? 0 : 20 * ((feature.properties.time - results.features[i - 1].properties.time) / 1000000000);
