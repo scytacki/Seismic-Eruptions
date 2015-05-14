@@ -1393,12 +1393,9 @@ MapController = (function() {
       tileSize = 256;
       zoom = 0;
     }
-    url = '&limit=' + this._getCurrentLimit(zoom, tileSize) + '&minmagnitude=' + this._getCurrentMag(zoom) + '&starttime=' + this.map.parameters.startdate + '&endtime=' + this.map.parameters.enddate;
+    url = '&limit=' + this._getCurrentLimit(zoom, tileSize) + '&jsonerror=true' + '&minmagnitude=' + this._getCurrentMag(zoom) + '&starttime=' + this.map.parameters.startdate + '&endtime=' + this.map.parameters.enddate;
     if ((nw != null) && (se != null)) {
       url += '&minlatitude=' + se.lat + '&maxlatitude=' + nw.lat + '&minlongitude=' + nw.lng + '&maxlongitude=' + se.lng;
-    }
-    if ((tileInfo != null ? tileInfo.requestId : void 0) != null) {
-      url += '&callback=' + tileInfo.requestId;
     }
     return url;
   };
@@ -1477,7 +1474,7 @@ MapController = (function() {
     if (this.map.parameters.timeline) {
       return this._loadStaticData(spinnerOpts);
     } else {
-      this.geojsonTileLayer = new L.TileLayer.GeoJSONP('http://earthquake.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time&format=geojson{url_params}', {
+      this.geojsonTileLayer = new L.TileLayer.GeoJSON('http://earthquake.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=magnitude&format=geojson{url_params}', {
         url_params: (function(_this) {
           return function(tileInfo) {
             return _this._geojsonURL(tileInfo);
@@ -1533,7 +1530,9 @@ MapController = (function() {
         callback: this.map.parameters.datap_callback
       });
     } else {
-      promise = loader.load('http://earthquake.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL());
+      promise = loader.load('http://earthquake.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL(), {
+        ajax: true
+      });
     }
     return promise.then((function(_this) {
       return function(results) {
