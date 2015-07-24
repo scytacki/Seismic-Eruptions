@@ -1,10 +1,10 @@
-
+/*
 .crosssection-popup {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  bottom: 7px; /* Gets rid of a vertical scroll bar */
+  bottom: 7px; /* Gets rid of a vertical scroll bar *//*
   z-index: 1000;
   background-color: black;
 }
@@ -46,5 +46,135 @@
 
 .ui-datepicker {
   z-index: 1199 !important
+}
+*/
+
+.ui-content,
+#map {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 0;
+  z-index: 0;
+}
+/*.ui-icon-knife after
+  background-image url("../images/knife-dashed-line.png")
+  background-size 18px 18px
+*/
+#controls {
+  text-align: center;
+  padding: 0;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+}
+#controls > .ui-block-a {
+  width: 25%;
+}
+#controls > .ui-block-b {
+  width: 50%;
+}
+#controls > .ui-block-c {
+  width: 25%;
+}
+#show-controls {
+  position: absolute;
+  right: 4.1666%;
+  margin-right: -24px;
+  margin-bottom: 0.95em;
+  bottom: 0;
+  z-index: 50;
+}
+#display-options-menu .ui-slider-track {
+  margin-left: 14px;
+  margin-right: 14px;
+}
+#display-options-menu .ui-rangeslider-sliders {
+  margin-left: 0;
+  margin-right: 0;
+}
+#slider-wrapper .ui-slider-track {
+  margin: 0.5em 8.333%;
+}
+#slider-wrapper .ui-slider-handle {
+  width: 54px;
+  height: 32px;
+  text-align: center;
+  margin: -21px 0 0 -26px;
+  padding-top: 3px;
+  line-height: 1.1em;
+  white-space: normal;
+  text-overflow: clip;
+}
+#display-options-menu {
+  position: absolute;
+  left: -220px;
+  top: -30px;
+  width: 400px;
+  height: 350px;
+}
+#display-options-menu .ui-popup-arrow-container {
+  margin-left: 200px;
+}
+#info-credits-pane {
+  position: absolute;
+  left: -210px;
+  top: -30px;
+  width: 310px;
+  height: 320px;
+}
+#info-credits-pane .ui-popup-arrow-container {
+  margin-left: 190px;
+}
+div.space-please {
+  margin: 1em 0;
+}
+h4,
+p {
+  margin: 0.5em 0;
+}
+#map-key {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 75;
+}
+#map-key .key-column {
+  min-width: 110px;
+}
+#map-key .depth-key {
+  position: relative;
+  padding-left: 30px;
+  margin-top: 22px;
+}
+#map-key .depth-key .depth-gradient {
+  position: absolute;
+  width: 20px;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background-color: #f00;
+  background-image: linear-gradient(#f00, #ff0, #008000, #00f);
+}
+#map-key .depth-key .labels p {
+  margin-bottom: 27px;
+}
+#map-key .magnitude-key .magnitude-item {
+  position: relative;
+  height: 40px;
+  padding-left: 60px;
+  padding-top: 15px;
+}
+#map-key .magnitude-key .magnitude-item .magnitude-example {
+  border: 1.5px solid #000;
+  border-radius: 100%;
+  position: absolute;
+  top: 25px;
+  left: 25px;
 }
 

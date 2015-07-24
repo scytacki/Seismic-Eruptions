@@ -157,11 +157,11 @@ Main = (function() {
     url = 'http://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time-asc' + '&starttime=' + this.util.getURLParameter("startdate") + 'T00:00:00' + '&endtime=' + this.util.getURLParameter("enddate") + 'T23:59:59' + '&minmagnitude=' + this.util.getURLParameter("mag") + '&minlatitude=' + Math.min(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&maxlatitude=' + Math.max(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&minlongitude=' + Math.min(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4) + '&maxlongitude=' + Math.max(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4);
     return loader.load(url).then((function(_this) {
       return function(results) {
-        var feature, size, _i, _len, _ref;
+        var feature, i, len, ref, size;
         size = results.features.length;
-        _ref = results.features;
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          feature = _ref[_i];
+        ref = results.features;
+        for (i = 0, len = ref.length; i < len; i++) {
+          feature = ref[i];
           L.geoJson(feature, {
             pointToLayer: ptToLayer
           }).bindPopup("Place: <b>" + feature.properties.place + "</b></br>Magnitude : <b>" + feature.properties.mag + "</b></br>Time : " + _this.util.timeConverter(feature.properties.time) + "</br>Depth : " + feature.geometry.coordinates[2] + " km").addTo(map);
@@ -272,15 +272,15 @@ Plot = (function() {
     url = 'http://earthquake.usgs.gov/fdsnws/event/1/query?format=geojson&orderby=time-asc' + '&minmagnitude=' + this.mag + '&starttime=' + this.startdate + '%2000:00:00' + '&endtime=' + this.enddate + '%2023:59:59' + '&minlatitude=' + Math.min(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&maxlatitude=' + Math.max(this.limits.latlng.y1, this.limits.latlng.y2, this.limits.latlng.y3, this.limits.latlng.y4) + '&minlongitude=' + Math.min(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4) + '&maxlongitude=' + Math.max(this.limits.latlng.x1, this.limits.latlng.x2, this.limits.latlng.x3, this.limits.latlng.x4);
     loader.load(url).then((function(_this) {
       return function(results) {
-        var box, feature, line, lines, mesh, rectmaterial, size, vertex1, vertex2, vertex3, vertex4, vertex5, vertex6, vertex7, vertex8, _i, _len, _ref;
+        var box, feature, i, len, line, lines, mesh, rectmaterial, ref, size, vertex1, vertex2, vertex3, vertex4, vertex5, vertex6, vertex7, vertex8;
         size = results.features.length;
         if (size === 0) {
           alert("No earthquakes inside the cross section in given time range");
           return;
         }
-        _ref = results.features;
-        for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-          feature = _ref[_i];
+        ref = results.features;
+        for (i = 0, len = ref.length; i < len; i++) {
+          feature = ref[i];
           if (_this._rect(_this.util.convertCoordinatesx(feature.geometry.coordinates[0]), _this.util.convertCoordinatesy(feature.geometry.coordinates[1]))) {
             _this.count++;
             _this._processFeature(feature);
@@ -437,7 +437,7 @@ Scene = (function() {
   function Scene() {}
 
   Scene.prototype.initialize = function() {
-    var ambientLight, canvasHeight, canvasWidth, cubeMesh, directionalLight, glassTexture, i, j, planeGeometry, planeMaterial, starfieldgeometry, starmaterial, starmesh, tileSource, _i, _j;
+    var ambientLight, canvasHeight, canvasWidth, cubeMesh, directionalLight, glassTexture, i, j, k, l, planeGeometry, planeMaterial, starfieldgeometry, starmaterial, starmesh, tileSource;
     this.limits = require('3D/map-limits');
     if (Detector.webgl) {
       this.renderer = new THREE.WebGLRenderer({
@@ -487,8 +487,8 @@ Scene = (function() {
     } else {
       tileSource = "http://otile1.mqcdn.com/tiles/1.0.0/sat/6/";
     }
-    for (j = _i = 0; _i < 4; j = ++_i) {
-      for (i = _j = 0; _j < 4; i = ++_j) {
+    for (j = k = 0; k < 4; j = ++k) {
+      for (i = l = 0; l < 4; i = ++l) {
         glassTexture = new THREE.ImageUtils.loadTexture(tileSource + (this.limits.coords.leftTileLimit + i) + "/" + (this.limits.coords.topTileLimit + j) + ".png");
         glassTexture.wrapS = glassTexture.wrapT = THREE.RepeatWrapping;
         glassTexture.repeat.set(1, 1);
@@ -561,9 +561,9 @@ require.define({"common/data-loader": function(exports, require, module) {
 DataLoader = (function() {
   function DataLoader() {}
 
-  DataLoader.prototype.load = function(url, _arg) {
-    var ajax, callback, _ref;
-    _ref = _arg != null ? _arg : {}, ajax = _ref.ajax, callback = _ref.callback;
+  DataLoader.prototype.load = function(url, arg) {
+    var ajax, callback, ref;
+    ref = arg != null ? arg : {}, ajax = ref.ajax, callback = ref.callback;
     return new Promise((function(_this) {
       return function(resolve, reject) {
         var id, scriptDomElement;
@@ -618,7 +618,7 @@ module.exports = DataLoader;
 
 require.define({"common/util": function(exports, require, module) {
   var Util,
-  __hasProp = {}.hasOwnProperty;
+  hasProp = {}.hasOwnProperty;
 
 Util = (function() {
   function Util() {}
@@ -677,7 +677,7 @@ Util = (function() {
     center = map.leafletMap.getCenter();
     params = {
       zoom: map.leafletMap.getZoom(),
-      center: "" + center.lat + "," + center.lng,
+      center: center.lat + "," + center.lng,
       mag: map.parameters.desiredMag,
       startdate: map.parameters.startdate,
       enddate: map.parameters.enddate
@@ -686,7 +686,7 @@ Util = (function() {
       params.timeline = true;
     }
     for (key in overrides) {
-      if (!__hasProp.call(overrides, key)) continue;
+      if (!hasProp.call(overrides, key)) continue;
       value = overrides[key];
       params[key] = value;
     }

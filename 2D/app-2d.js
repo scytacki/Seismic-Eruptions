@@ -109,564 +109,1514 @@
   require.brunch = true;
   globals.require = require;
 })();
-require.define({"2D/app": function(exports, require, module) {
-  var App, Map, MapController;
+require.define({"2D/BaseMapLayerManager": function(exports, require, module) {
+  
+/*
+A class to swap out different base maps
+Note: There's supposed to be a controller and provider that feeds into here, but NOTE: I've
+skipped them both for rapid prototyping.
+ */
+var BaseMapLayerManager, BaseMapSelectorUI, MapView, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
 
-Map = require('2D/map');
+NNode = require("./NNode");
 
-MapController = require('2D/map-controller');
+BaseMapSelectorUI = require("./BaseMapSelectorUI");
 
-App = (function() {
-  function App() {
-    this.util = require('common/util');
-    this.map = new Map();
-    this.controller = new MapController(this.map);
-    $("#index").on("pageshow", (function(_this) {
-      return function(event, ui) {
-        $.mobile.loading('show');
-        _this.map.leafletMap.invalidateSize(true);
-        _this.map.layers.baseLayer2.addTo(_this.map.leafletMap);
-        if ((_this.map.parameters.center != null) && (_this.map.parameters.zoom != null)) {
-          _this.map.leafletMap.setView(_this.map.parameters.center, _this.map.parameters.zoom);
-        } else {
-          _this.map.leafletMap.fitBounds(L.latLngBounds(_this.map.parameters.nw, _this.map.parameters.se));
-        }
-        _this.controller.initController();
-        _this.controller.timeLine.timeScale(_this.controller.speed);
-        _this.controller.timeLine.pause();
-        $.mobile.loading('hide');
-        setTimeout(function() {
-          return _this.map.leafletMap.invalidateSize();
-        }, 1);
-        return _this.init();
+MapView = require("./MapView");
+
+module.exports = new (BaseMapLayerManager = (function(superClass) {
+  extend(BaseMapLayerManager, superClass);
+
+  function BaseMapLayerManager() {
+    BaseMapLayerManager.__super__.constructor.apply(this, arguments);
+    this.streetMap = L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {});
+    this.satelliteMap = L.tileLayer('http://{s}.mqcdn.com/tiles/1.0.0/sat/{z}/{x}/{y}.png', {
+      subdomains: ['otile1', 'otile2', 'otile3', 'otile4']
+    });
+    this.earthquakeDensityMap = L.tileLayer('http://{s}.tiles.mapbox.com/v3/bclc-apec.map-rslgvy56/{z}/{x}/{y}.png', {});
+    this.previouslyDisplaying = this.satelliteMap;
+    this.mapView = MapView;
+    this.baseMapSelector = BaseMapSelectorUI;
+    this.mapView.tell("add-layer", this.satelliteMap);
+    this.baseMapSelector.subscribe("update", (function(_this) {
+      return function(value) {
+        _this.mapView.tell("remove-layer", _this.previouslyDisplaying);
+        return _this.mapView.tell("add-layer", _this.previouslyDisplaying = (function() {
+          switch (value) {
+            case "street":
+              return this.streetMap;
+            case "satellite":
+              return this.satelliteMap;
+            case "density":
+              return this.earthquakeDensityMap;
+          }
+        }).call(_this));
       };
     })(this));
   }
 
-  App.prototype.init = function() {
-    var drawingMode, elem, maxSelected, minSelected, removeDrawingTool, startDrawingTool, updateShareLink;
-    $('#play').click((function(_this) {
-      return function() {
-        return _this.controller.timeLine.resume();
-      };
-    })(this));
-    $('#pause').click((function(_this) {
-      return function() {
-        return _this.controller.timeLine.pause();
-      };
-    })(this));
-    $('#speedup').click((function(_this) {
-      return function() {
-        _this.controller.speed *= 1.5;
-        return _this.controller.timeLine.timeScale(_this.controller.speed);
-      };
-    })(this));
-    $('#speeddown').click((function(_this) {
-      return function() {
-        if (_this.controller.speed >= 0.5) {
-          _this.controller.speed /= 2;
-          return _this.controller.timeLine.timeScale(_this.controller.speed);
-        }
-      };
-    })(this));
-    $('#changeparams').click((function(_this) {
-      return function() {
-        return _this.controller.timeLine.pause();
-      };
-    })(this));
-    $('#editparamscancel').click((function(_this) {
-      return function() {
-        return _this.controller.timeLine.resume();
-      };
-    })(this));
-    $('#editparamsenter').click((function(_this) {
-      return function() {
-        return _this.controller.timeLine.pause();
-      };
-    })(this));
-    if (this.map.parameters.timeline) {
-      $('#options-button').attr('href', '#options-details');
-    }
-    $('#daterange').dateRangeSlider({
-      arrows: false,
-      bounds: {
-        min: new Date(1900, 0, 1),
-        max: Date.now()
-      },
-      defaultValues: {
-        min: new Date(this.map.parameters.startdate),
-        max: new Date(this.map.parameters.enddate)
-      },
-      scales: [
-        {
-          next: function(value) {
-            var n;
-            n = new Date(value);
-            return new Date(n.setYear(value.getFullYear() + 20));
-          },
-          label: function(value) {
-            return value.getFullYear();
-          }
-        }
-      ]
-    });
-    $('#magnitude-slider').val(this.map.parameters.desiredMag || this.map.parameters.mag).slider('refresh');
-    $.datepicker.setDefaults({
-      minDate: new Date(1900, 0, 1),
-      maxDate: 0,
-      changeMonth: true,
-      changeYear: true
-    });
-    minSelected = function(dateText) {
-      var newDate, prevVals;
-      prevVals = $('#daterange').dateRangeSlider('values');
-      newDate = new Date(dateText);
-      return $('#daterange').dateRangeSlider('values', newDate, prevVals.max);
-    };
-    maxSelected = function(dateText) {
-      var newDate, prevVals;
-      prevVals = $('#daterange').dateRangeSlider('values');
-      newDate = new Date(dateText);
-      return $('#daterange').dateRangeSlider('values', prevVals.min, newDate);
-    };
-    $('.ui-rangeSlider-leftLabel').click(function(evt) {
-      return $('.ui-rangeSlider-leftLabel').datepicker('dialog', $('#daterange').dateRangeSlider('values').min, minSelected, {}, evt);
-    });
-    $('.ui-rangeSlider-rightLabel').click(function(evt) {
-      return $('.ui-rangeSlider-rightLabel').datepicker('dialog', $('#daterange').dateRangeSlider('values').max, maxSelected, {}, evt);
-    });
-    updateShareLink = (function(_this) {
-      return function() {
-        var query, range, url;
-        range = $('#daterange').dateRangeSlider('values');
-        query = _this.util.queryString(_this.map, {
-          startdate: _this.util.usgsDate(range.min),
-          enddate: _this.util.usgsDate(range.max),
-          mag: $('#magnitude-slider').val()
-        });
-        url = window.location.origin + window.location.pathname + query;
-        $('#share-link').attr("href", url);
-        return $('#share-link').text(url);
-      };
-    })(this);
-    elem = null;
-    $('#getQuakeCount').click((function(_this) {
-      return function() {
-        var endtime, range, starttime;
-        $(_this).addClass('ui-disabled');
-        $('#quake-count').html("Earthquakes: ???");
-        range = $('#daterange').dateRangeSlider('values');
-        starttime = _this.util.usgsDate(range.min);
-        endtime = _this.util.usgsDate(range.max);
-        elem = document.createElement('script');
-        elem.src = 'http://earthquake.usgs.gov/fdsnws/event/1/count?starttime=' + starttime + '&endtime=' + endtime + '&eventtype=earthquake&format=geojson' + _this.geojsonParams();
-        elem.id = 'quake-count-script';
-        document.body.appendChild(elem);
-        return updateShareLink();
-      };
-    })(this));
-    window.updateQuakeCount = function(result) {
-      $('#quake-count').html("Earthquakes: " + result.count);
-      elem = document.getElementById('quake-count-script');
-      document.body.removeChild(elem);
-      return $('#getQuakeCount').removeClass('ui-disabled');
-    };
-    $('#loadSelectedData').click((function(_this) {
-      return function() {
-        var range;
-        range = $('#daterange').dateRangeSlider('values');
-        _this.map.parameters.startdate = _this.util.usgsDate(range.min);
-        _this.map.parameters.enddate = _this.util.usgsDate(range.max);
-        _this.map.parameters.desiredMag = $('#magnitude-slider').val();
-        _this.controller.reloadData();
-        history.pushState({
-          mapParams: _this.map.parameters
-        }, 'Seismic Eruptions', _this.util.queryString(_this.map));
-        return updateShareLink();
-      };
-    })(this));
-    $('#share-wrapper').hide();
-    $('#shareSelectedData').click(function() {
-      updateShareLink();
-      return $('#share-wrapper').show();
-    });
-    if (this.map.parameters.timeline) {
-      $('#index').click(function() {
-        $('#playcontrols').fadeIn();
-        $('#slider-wrapper').fadeIn();
-        $('#date').fadeIn();
-        setTimeout(function() {
-          return $('#playcontrols').fadeOut();
-        }, 5000);
-        return setTimeout(function() {
-          $('#slider-wrapper').fadeOut();
-          return $('#date').fadeOut();
-        }, 12000);
-      });
-      $('#playback').hover(function() {
-        $('#playcontrols').fadeIn();
-        $('#slider-wrapper').fadeIn();
-        $('#date').fadeIn();
-        return setTimeout(function() {
-          $('#slider-wrapper').fadeOut();
-          $('#date').fadeOut();
-          return $('#playcontrols').fadeOut();
-        }, 8000);
-      });
-      setTimeout(function() {
-        $('#slider-wrapper').fadeOut();
-        $('#date').fadeOut();
-        return $('#playcontrols').fadeOut();
-      }, 10000);
-    } else {
-      $('#playback').fadeOut();
-    }
-    drawingMode = false;
-    $('#drawingTool').click((function(_this) {
-      return function() {
-        var i, _i, _ref;
-        if (!drawingMode) {
-          _this.controller.timeLine.pause();
-          $.mobile.loading('show');
-          $('#playback').fadeOut();
-          $('#crosssection').fadeIn();
-          for (i = _i = 0, _ref = _this.map.values.size; 0 <= _ref ? _i < _ref : _i > _ref; i = 0 <= _ref ? ++_i : --_i) {
-            if (!_this.map.leafletMap.hasLayer(_this.map.earthquakes.circles[i])) {
-              _this.map.earthquakes.circles[i].setStyle({
-                fillOpacity: 0.5,
-                fillColor: "#" + _this.controller.rainbow.colourAt(_this.map.earthquakes.depth[i])
-              });
-              _this.map.earthquakes.circles[i].addTo(_this.map.leafletMap);
-            }
-          }
-          $.mobile.loading('hide');
-          return drawingMode = true;
-        }
-      };
-    })(this));
-    $('#drawingToolDone').click((function(_this) {
-      return function() {
-        if (drawingMode) {
-          $.mobile.loading('show');
-          if (_this.map.parameters.timeline) {
-            $('#playback').fadeIn();
-          }
-          $('#crosssection').fadeOut();
-          $.mobile.loading('hide');
-          drawingMode = false;
-          return _this.map.leafletMap.setZoom(2);
-        }
-      };
-    })(this));
-    $('#mapselector').change((function(_this) {
-      return function() {
-        if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer1)) {
-          _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer1);
-        }
-        if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer2)) {
-          _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer2);
-        }
-        if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer3)) {
-          _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer3);
-        }
-        switch ($('#mapselector').val()) {
-          case '1':
-            _this.map.layers.baseLayer1.addTo(_this.map.leafletMap);
-            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer2)) {
-              _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer2);
-            }
-            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer3)) {
-              return _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer3);
-            }
-            break;
-          case '2':
-            _this.map.layers.baseLayer2.addTo(_this.map.leafletMap);
-            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer3)) {
-              _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer3);
-            }
-            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer1)) {
-              return _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer1);
-            }
-            break;
-          case '3':
-            _this.map.layers.baseLayer3.addTo(_this.map.leafletMap);
-            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer2)) {
-              _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer2);
-            }
-            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer1)) {
-              return _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer1);
-            }
-        }
-      };
-    })(this));
-    $('#date-1-y').change(function() {
-      return loadCount(1);
-    });
-    $('#date-1-m').change(function() {
-      return loadCount(1);
-    });
-    $('#date-2-y').change(function() {
-      return loadCount(1);
-    });
-    $('#date-2-m').change(function() {
-      return loadCount(1);
-    });
-    startDrawingTool = function() {
-      var i, _i, _ref;
-      $('#overlay').fadeIn();
-      $('#startDrawingToolButton').fadeOut();
-      $('#Drawingtools').fadeIn();
-      $("#slider").slider({
-        disabled: true
-      });
-      document.getElementById("play").disabled = true;
-      document.getElementById("pause").disabled = true;
-      document.getElementById("speedup").disabled = true;
-      document.getElementById("speeddown").disabled = true;
-      tl.pause();
-      for (i = _i = 0, _ref = this.map.values.size; _i < _ref; i = _i += 1) {
-        if (!this.map.leafletMap.hasLayer(this.map.earthquakes.circles[i])) {
-          this.map.earthquakes.circles[i].setStyle({
-            fillOpacity: 0.5,
-            fillColor: "#" + this.controller.rainbow.colourAt(this.map.earthquakes.depth[i])
-          });
-          this.map.earthquakes.circles[i].addTo(this.map.leafletMap);
-        }
-      }
-      return $('#overlay').fadeOut();
-    };
-    return removeDrawingTool = function() {
-      $('#overlay').fadeIn();
-      $('#startDrawingToolButton').fadeIn();
-      $('#Drawingtools').fadeOut();
-      $("#slider").slider({
-        disabled: false
-      });
-      document.getElementById("play").disabled = false;
-      document.getElementById("pause").disabled = false;
-      document.getElementById("speedup").disabled = false;
-      document.getElementById("speeddown").disabled = false;
-      return $('#overlay').fadeOut();
-    };
-  };
+  return BaseMapLayerManager;
 
-  App.prototype.geojsonParams = function() {
-    var bounds, latSpan, lngSpan, mag, nw, se, url;
-    bounds = this.map.leafletMap.getBounds();
-    nw = bounds.getNorthWest();
-    se = bounds.getSouthEast();
-    mag = $('#magnitude-slider').val();
-    latSpan = nw.lat - se.lat;
-    lngSpan = se.lng - nw.lng;
-    if (latSpan >= 180 || latSpan <= -180) {
-      nw.lat = 90;
-      se.lat = -90;
-    }
-    if (lngSpan >= 180 || lngSpan <= -180) {
-      nw.lng = -180;
-      se.lng = 180;
-    }
-    url = '&minmagnitude=' + mag + '&minlatitude=' + se.lat + '&maxlatitude=' + nw.lat + '&minlongitude=' + nw.lng + '&maxlongitude=' + se.lng + '&callback=updateQuakeCount';
-    return url;
-  };
-
-  return App;
-
-})();
-
-module.exports = App;
+})(NNode));
 
 
 }});
 
-require.define({"2D/cross-section": function(exports, require, module) {
-  var CrossSection, CustomPolyline;
+require.define({"2D/BaseMapSelectorUI": function(exports, require, module) {
+  
+/*
+A class to manage the base map selector
+ */
+var BaseMapSelectorUI, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
 
-CustomPolyline = require('2D/extensions/custom-polyline');
+NNode = require("./NNode");
 
-CrossSection = (function() {
-  CrossSection.prototype.width = 1.5;
+module.exports = new (BaseMapSelectorUI = (function(superClass) {
+  extend(BaseMapSelectorUI, superClass);
 
-  CrossSection.prototype.lineOptions = {
-    stroke: true,
-    color: '#ff0000',
-    weight: 4,
-    opacity: 0.5,
-    fill: false,
-    clickable: true
-  };
-
-  CrossSection.prototype.points = [];
-
-  CrossSection.prototype._featureGroup = null;
-
-  CrossSection.prototype._line = null;
-
-  CrossSection.prototype._rect = null;
-
-  function CrossSection(map) {
-    var polyline;
-    this.map = map;
-    this._featureGroup = new L.LayerGroup();
-    this._editMarkerGroup = new L.LayerGroup();
-    this.map.addLayer(this._featureGroup);
-    this.map.addLayer(this._editMarkerGroup);
-    polyline = new CustomPolyline(this.map);
-    polyline.enable();
-    this._line = new L.Polyline([], this.lineOptions);
-    this._rect = new L.polygon([]);
-    this.map.on('draw:created', (function(_this) {
-      return function(e) {
-        return _this.handleCreate(e);
+  function BaseMapSelectorUI() {
+    var preventChangeFromHappenningHack;
+    BaseMapSelectorUI.__super__.constructor.apply(this, arguments);
+    preventChangeFromHappenningHack = false;
+    this.baseMapSelector = $("#base-map-selector");
+    this.baseMapSelector.on("change", (function(_this) {
+      return function() {
+        if (!preventChangeFromHappenningHack) {
+          return _this.post("update", _this.baseMapSelector.val());
+        }
+      };
+    })(this));
+    this.listen("set", (function(_this) {
+      return function(value) {
+        preventChangeFromHappenningHack = true;
+        _this.baseMapSelector.val(value).selectmenu("refresh");
+        return preventChangeFromHappenningHack = false;
       };
     })(this));
   }
 
-  CrossSection.prototype.handleCreate = function(e) {
-    var p0, p1, _ref;
-    _ref = e.layer.getLatLngs(), p0 = _ref[0], p1 = _ref[1];
-    this._updateLine(p0, p1);
-    this._updateRect(p0, p1);
-    this._createEditControls();
-    this.current = {
-      center: this.map.getCenter(),
-      zoom: this.map.getZoom()
-    };
-    if (this._rect != null) {
-      return this.map.fitBounds(this._rect.getBounds());
-    }
-  };
+  return BaseMapSelectorUI;
 
-  CrossSection.prototype.destroy = function() {
-    this.map.removeLayer(this._featureGroup);
-    this.map.removeLayer(this._editMarkerGroup);
-    return this.map.setView(this.current.center, this.current.zoom);
-  };
+})(NNode));
 
-  CrossSection.prototype._updateLine = function(p0, p1) {
-    this._line.setLatLngs([p0, p1]);
-    if (!this._featureGroup.hasLayer(this._line)) {
-      this._featureGroup.addLayer(this._line);
-    }
-    return this._line;
-  };
 
-  CrossSection.prototype._updateRect = function(p0, p1) {
-    var c0, c1, c3, dLat, dLng, dir, distance, dx, dy, n0, r0, r1, r2, r3;
-    c0 = this.map.latLngToContainerPoint(p0);
-    c1 = this.map.latLngToContainerPoint(p1);
-    dir = this._direction(c0, c1);
-    dLng = this.width * Math.cos(dir + Math.PI / 2);
-    dLat = this.width * Math.sin(dir + Math.PI / 2);
-    n0 = L.latLng(p0.lat + dLat, p0.lng + dLng);
-    c3 = this.map.latLngToContainerPoint(n0);
-    distance = c0.distanceTo(c3);
-    dx = distance * Math.cos(dir + Math.PI / 2);
-    dy = distance * Math.sin(dir + Math.PI / 2);
-    r0 = c0.add(L.point(dx, dy));
-    r1 = c0.add(L.point(-dx, -dy));
-    r2 = c1.add(L.point(-dx, -dy));
-    r3 = c1.add(L.point(dx, dy));
-    this.points = [this.map.containerPointToLatLng(r0), this.map.containerPointToLatLng(r1), this.map.containerPointToLatLng(r2), this.map.containerPointToLatLng(r3)];
-    this._rect.setLatLngs(this.points);
-    if (!this._featureGroup.hasLayer(this._rect)) {
-      this._featureGroup.addLayer(this._rect);
-    }
-    return this._rect;
-  };
+}});
 
-  CrossSection.prototype._direction = function(p0, p1) {
-    return Math.atan2(p1.y - p0.y, p1.x - p0.x);
-  };
+require.define({"2D/BoundariesLayerManager": function(exports, require, module) {
+  
+/*
+A class to add or remove the boundaries layer
+Note: There's supposed to be a controller and provider that feeds into here, but NOTE: I've
+skipped them both for rapid prototyping.
+ */
+var BoundariesLayerManager, BoundariesToggleUI, MapView, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
 
-  CrossSection.prototype._midPoint = function(p0, p1) {
-    var dx, dy;
-    dx = p1.lng - p0.lng;
-    dy = p1.lat - p0.lat;
-    return L.latLng(p0.lat + (dy / 2), p0.lng + (dx / 2));
-  };
+NNode = require("./NNode");
 
-  CrossSection.prototype._createEditControls = function() {
-    var centerControl, leftControl, resizeControl, rightControl;
-    leftControl = this._createEditMarker(this._line.getLatLngs()[0], (function(_this) {
-      return function(e) {
-        _this._updateLine(e.target.getLatLng(), _this._line.getLatLngs()[1]);
-        _this._updateRect(e.target.getLatLng(), _this._line.getLatLngs()[1]);
-        centerControl.updateLocation(_this._rect.getBounds().getCenter());
-        return resizeControl.updateLocation(_this._midPoint(_this._rect.getLatLngs()[0], _this._rect.getLatLngs()[3]));
-      };
-    })(this));
-    rightControl = this._createEditMarker(this._line.getLatLngs()[1], (function(_this) {
-      return function(e) {
-        _this._updateLine(_this._line.getLatLngs()[0], e.target.getLatLng());
-        _this._updateRect(_this._line.getLatLngs()[0], e.target.getLatLng());
-        centerControl.updateLocation(_this._rect.getBounds().getCenter());
-        return resizeControl.updateLocation(_this._midPoint(_this._rect.getLatLngs()[0], _this._rect.getLatLngs()[3]));
-      };
-    })(this));
-    centerControl = this._createEditMarker(this._midPoint.apply(this, this._line.getLatLngs()), (function(_this) {
-      return function(e) {
-        var dx, dy, newLatLng, p0, p1, p3, _ref;
-        newLatLng = e.target.getLatLng();
-        dx = newLatLng.lng - centerControl._origLatLng.lng;
-        dy = newLatLng.lat - centerControl._origLatLng.lat;
-        _ref = _this._line.getLatLngs(), p0 = _ref[0], p1 = _ref[1];
-        p0.lat += dy;
-        p0.lng += dx;
-        p1.lat += dy;
-        p1.lng += dx;
-        _this._updateLine(p0, p1);
-        _this._updateRect(p0, p1);
-        leftControl.updateLocation(p0);
-        rightControl.updateLocation(p1);
-        p3 = resizeControl.getLatLng();
-        p3.lat += dy;
-        p3.lng += dx;
-        resizeControl.setLatLng(p3);
-        return centerControl._origLatLng = newLatLng;
-      };
-    })(this));
-    return resizeControl = this._createEditMarker(this._midPoint(this._rect.getLatLngs()[0], this._rect.getLatLngs()[3]), (function(_this) {
-      return function(e) {
-        var centerLoc, denom, myLoc, numer, p1, p2, _ref;
-        myLoc = e.target.getLatLng();
-        centerLoc = centerControl.getLatLng();
-        _ref = _this._line.getLatLngs(), p1 = _ref[0], p2 = _ref[1];
-        numer = Math.abs((p2.lat - p1.lat) * myLoc.lng - (p2.lng - p1.lng) * myLoc.lat + p2.lng * p1.lat - p2.lat * p1.lng);
-        denom = Math.sqrt(Math.pow(p2.lng - p1.lng, 2) + Math.pow(p2.lat - p1.lat, 2));
-        _this.width = numer / denom;
-        console.log("new width: ", _this.width, e.target.getLatLng(), centerControl.getLatLng());
-        _this._updateLine.apply(_this, _this._line.getLatLngs());
-        return _this._updateRect.apply(_this, _this._line.getLatLngs());
-      };
-    })(this));
-  };
+BoundariesToggleUI = require("./BoundariesToggleUI");
 
-  CrossSection.prototype._createEditMarker = function(latlng, onDrag) {
-    var editMarker;
-    editMarker = new L.Marker(latlng, {
-      draggable: true,
-      icon: new L.DivIcon({
-        iconSize: new L.Point(8, 8),
-        className: 'leaflet-div-icon leaflet-editing-icon'
-      })
+MapView = require("./MapView");
+
+module.exports = new (BoundariesLayerManager = (function(superClass) {
+  extend(BoundariesLayerManager, superClass);
+
+  function BoundariesLayerManager() {
+    BoundariesLayerManager.__super__.constructor.apply(this, arguments);
+    this.boundariesLayer = new L.KML("plates.kml", {
+      async: true
     });
-    editMarker._origLatLng = latlng;
-    editMarker.updateLocation = function(latLng) {
-      this._origLatLng = latLng;
-      return this.setLatLng(latLng);
-    };
-    editMarker.on('drag', onDrag);
-    editMarker.on('dragend', onDrag);
-    this._editMarkerGroup.addLayer(editMarker);
-    return editMarker;
+    this.previouslyDisplaying = false;
+    this.mapView = MapView;
+    this.boundariesToggle = BoundariesToggleUI;
+    this.boundariesToggle.subscribe("update", (function(_this) {
+      return function(value) {
+        if (value) {
+          if (!_this.previouslyDisplaying) {
+            _this.mapView.tell("add-layer", _this.boundariesLayer);
+          }
+        } else {
+          if (_this.previouslyDisplaying) {
+            _this.mapView.tell("remove-layer", _this.boundariesLayer);
+          }
+        }
+        return _this.previouslyDisplaying = value;
+      };
+    })(this));
+  }
+
+  return BoundariesLayerManager;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/BoundariesToggleUI": function(exports, require, module) {
+  
+/*
+A class to manage the boundaries toggle switch
+ */
+var BoundariesToggleUI, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (BoundariesToggleUI = (function(superClass) {
+  extend(BoundariesToggleUI, superClass);
+
+  function BoundariesToggleUI() {
+    var preventChangeFromHappenningHack;
+    BoundariesToggleUI.__super__.constructor.apply(this, arguments);
+    preventChangeFromHappenningHack = false;
+    this.plateToggle = $("#plate-toggle");
+    this.plateToggle.on("change", (function(_this) {
+      return function() {
+        if (!preventChangeFromHappenningHack) {
+          return _this.post("update", _this.plateToggle.parent().hasClass("ui-flipswitch-active"));
+        }
+      };
+    })(this));
+    this.listen("set", (function(_this) {
+      return function(value) {
+        preventChangeFromHappenningHack = true;
+        if (value) {
+          _this.plateToggle.parent().addClass("ui-flipswitch-active");
+        } else {
+          _this.plateToggle.parent().removeClass("ui-flipswitch-active");
+        }
+        return preventChangeFromHappenningHack = false;
+      };
+    })(this));
+  }
+
+  return BoundariesToggleUI;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/CacheFilter": function(exports, require, module) {
+  
+/*
+CacheFilter - a class to receive data from the web and cache it all up, and serve it to the filters
+that come after.
+
+TODO: FIXME: HACK: NOTE: THIS CLASS IS HALF-BAKED at the moment
+ */
+var CacheFilter, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (CacheFilter = (function(superClass) {
+  extend(CacheFilter, superClass);
+
+  function CacheFilter() {
+    CacheFilter.__super__.constructor.apply(this, arguments);
+    setTimeout((function(_this) {
+      return function() {
+        return $.ajax("earthquakeSeed.json").done(function(data) {
+          return _this.post("stream", data.features);
+        });
+      };
+    })(this), 200);
+  }
+
+  return CacheFilter;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/ControlsManager": function(exports, require, module) {
+  
+/*
+Manages the showing/hiding of the bottom bar
+ */
+var App, ControlsUI, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+ControlsUI = require("./ControlsUI");
+
+module.exports = new (App = (function(superClass) {
+  extend(App, superClass);
+
+  function App() {
+    App.__super__.constructor.apply(this, arguments);
+    this.controlsUI = ControlsUI;
+    this.controlsVisible = true;
+    this.controls = $("#controls");
+    this.showControls = $("#show-controls");
+    this.controlsUI.subscribe("update", (function(_this) {
+      return function() {
+        _this.controlsVisible = !_this.controlsVisible;
+        if (_this.controlsVisible) {
+          _this.controls.finish().slideDown(300);
+          return _this.showControls.finish().fadeOut(300);
+        } else {
+          _this.controls.finish().slideUp(300);
+          return _this.showControls.finish().fadeIn(300);
+        }
+      };
+    })(this));
+  }
+
+  return App;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/ControlsUI": function(exports, require, module) {
+  
+/*
+Represents the two show/hide chevron buttons
+ */
+var App, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (App = (function(superClass) {
+  extend(App, superClass);
+
+  function App() {
+    App.__super__.constructor.apply(this, arguments);
+    this.showButton = $("#show-controls");
+    this.hideButton = $("#hide-controls");
+    this.showButton.add(this.hideButton).click((function(_this) {
+      return function() {
+        return _this.post("update");
+      };
+    })(this));
+  }
+
+  return App;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/DataFormatter": function(exports, require, module) {
+  
+/*
+A class that contains helper methods to determine how earthquake data is formatted
+in terms of depth --> color and magnitude --> radius
+ */
+var DataFormatter, monthArray, rainbow;
+
+rainbow = new Rainbow();
+
+monthArray = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+module.exports = DataFormatter = (function() {
+  function DataFormatter() {}
+
+  DataFormatter.MAX_DEPTH = 700;
+
+  DataFormatter.depthToColor = function(depth) {
+    rainbow.setNumberRange(0, DataFormatter.MAX_DEPTH);
+    return "#" + (rainbow.colourAt(depth));
   };
 
-  return CrossSection;
+  DataFormatter.magnitudeToRadius = function(magnitude) {
+    return 0.9 * Math.pow(1.5, magnitude - 1);
+  };
+
+  DataFormatter.formatMagnitude = function(magnitude) {
+    return magnitude.toFixed(1);
+  };
+
+  DataFormatter.formatDate = function(dateNumber) {
+    var date;
+    date = new Date(dateNumber);
+    return monthArray[date.getMonth()] + " " + (date.getDate()) + ", " + (date.getFullYear());
+  };
+
+  return DataFormatter;
 
 })();
 
-module.exports = CrossSection;
+
+}});
+
+require.define({"2D/DateFilter": function(exports, require, module) {
+  
+/*
+DateFilter - a class to receive a bunch of earthquakes, and pass on the ones that lie in between
+the set date ranges.
+
+Before we begin, let's get a visual picture of what's going on here.
+
+## FILTER DATA FLOW DIAGRAM ##
+
++---------------------------------+
+| Another node that is our input  |
++---------------------------------+
+   inputNode     ||            ^ inputNode
+   .subscribe()  \/            | .tell()
++---------------------------------+
+| * The filter in consideration * |
++---------------------------------+
+         @post() ||            ^ @listen()
+                 \/            |
++---------------------------------+
+| Another node that is our output |
++---------------------------------+
+
+The majority of data (the general data flow) is shown by the thick arrows in the center.
+The control flow follows the thinner arrows on the right.
+NOTE that the listed methods pertain to the filter in consideration, which is our current class.
+
+## FILTER OPERATIONS OVERVIEW ##
+
+A filter is a device designed to take some input and remove something from it to provide as output.
+In this case, we're removing earthquakes that don't fall within a date range.
+
+Now, these fliters are designed with the web in mind. They're designed to be asynchonous and accept
+data points in chunks as they arrive over a web connection. This chunk-based data flow I will call
+streaming. Streaming does has a downside though. Because data flows around in chunks, it can be hard
+to get a grand picture of what the entire data set looks like at a given time, say, to plot all the
+points that have arrived thus far. As such, each filter has a cache. Each time a chunk (which should
+contain new data points only) gets sent to the filter, those points are added to the cache.
+
+Now why did I choose to use a per-filter cache? Why not one at the very end of the filter chain?
+It's because I figured we'd need to deal with changing filter parameters. Every time a filter's
+parameters change, it may output different information. For example, let's say that the date range
+was expanded by the user, from 1900-1950 to 1900-2000. That just added 50 years of earthquake
+points to our filter's output. All that needs to be done in this case is to send a chunk
+of earthquakes from 1950-2000 to the subsequent filter, and it's good to go, the same way as if it
+were to receive a new set of data from the web. This new data will propagate down the chain and
+eventually reflect in the map.
+
+However, let's use the flipside of that example and say that the date range was contracted from
+1900-2000 back to 1900-1950. Now the points between 1950-2000 residing in the subsequent filter's
+cache are invalid, and don't pertain to our current filter parameters. They need to be removed
+somehow. The efficient option would be to inform the filter that these points are invalid,
+completing a diff-like system, but I've opted for a less efficient but easier to code method of
+completely clearing the subsequent filter's cache, then refilling it manually with data that
+passes the current filter. I deem this process flushing.
+
+That just about sums up the mechanics of the filter.
+ */
+var DateFilter, DateFilterController, MagnitudeFilter, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+MagnitudeFilter = require("./MagnitudeFilter");
+
+DateFilterController = require("./DateFilterController");
+
+module.exports = new (DateFilter = (function(superClass) {
+  extend(DateFilter, superClass);
+
+  function DateFilter() {
+    DateFilter.__super__.constructor.apply(this, arguments);
+    this.controller = DateFilterController;
+    this.startDate = -Infinity;
+    this.endDate = Infinity;
+    this.controller.subscribe("update", (function(_this) {
+      return function(updatedFilter) {
+        var additionalPoints;
+        if (updatedFilter.startDate > _this.startDate || updatedFilter.endDate < _this.endDate) {
+          _this.post("flush", _this.filterDates(_this.cachedData, updatedFilter.startDate, updatedFilter.endDate));
+        } else {
+          additionalPoints = [];
+          _this.filterDates(_this.cachedData, updatedFilter.startDate, _this.startDate, additionalPoints);
+          _this.filterDates(_this.cachedData, _this.endDate, updatedFilter.endDate, additionalPoints);
+          if (additionalPoints.length > 0) {
+            _this.post("stream", additionalPoints);
+          }
+        }
+        _this.startDate = updatedFilter.startDate;
+        return _this.endDate = updatedFilter.endDate;
+      };
+    })(this));
+    this.cachedData = [];
+    this.inputNode = MagnitudeFilter;
+    this.inputNode.subscribe("stream", (function(_this) {
+      return function(newData) {
+        var i, len, point;
+        for (i = 0, len = newData.length; i < len; i++) {
+          point = newData[i];
+          _this.cachedData.push(point);
+        }
+        return _this.post("stream", _this.filterDates(newData, _this.startDate, _this.endDate));
+      };
+    })(this));
+    this.inputNode.subscribe("flush", (function(_this) {
+      return function(freshData) {
+        _this.cachedData = freshData;
+        return _this.post("flush", _this.filterDates(_this.cachedData, _this.startDate, _this.endDate));
+      };
+    })(this));
+    this.inputNode.tell("request-update");
+  }
+
+
+  /*
+  Creates a new array and fills it with the dataset, diced with given parameters
+  Note: startDate is inclusive, endDate is exclusive
+   */
+
+  DateFilter.prototype.filterDates = function(data, startDate, endDate, newArray) {
+    var i, len, point, ref;
+    if (newArray == null) {
+      newArray = [];
+    }
+    for (i = 0, len = data.length; i < len; i++) {
+      point = data[i];
+      if ((startDate <= (ref = point.properties.time) && ref < endDate)) {
+        newArray.push(point);
+      }
+    }
+    return newArray;
+  };
+
+  return DateFilter;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/DateFilterController": function(exports, require, module) {
+  
+/*
+A class to manage the date filter, connecting the data filter to the
+ * UI date range slider, playback slider, and the animation of date range
+ */
+var DataFormatter, DateFilterController, DateRangeSliderUI, NNode, PlaybackController, Utils,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+PlaybackController = require("./PlaybackController");
+
+DateRangeSliderUI = require("./DateRangeSliderUI");
+
+DataFormatter = require("./DataFormatter");
+
+Utils = require("./Utils");
+
+module.exports = new (DateFilterController = (function(superClass) {
+  extend(DateFilterController, superClass);
+
+  DateFilterController.MIN_DATE = (new Date(1900, 0)).valueOf();
+
+  DateFilterController.MAX_DATE = Date.now();
+
+  function DateFilterController() {
+    DateFilterController.__super__.constructor.apply(this, arguments);
+    this.startDate = new Date(1960, 0).valueOf();
+    this.endDate = DateFilterController.MAX_DATE;
+    this.animatedEndDate = DateFilterController.MAX_DATE;
+    this.playbackController = PlaybackController;
+    this.playbackController.subscribe("update", (function(_this) {
+      return function(progress) {
+        _this.animatedEndDate = progress * (_this.endDate - _this.startDate) + _this.startDate;
+        _this.postControllerChanges();
+        return _this.updatePlaybackSliderTextOnly();
+      };
+    })(this));
+    this.dateRangeSlider = DateRangeSliderUI;
+    this.dateRangeSlider.tell("configure", {
+      startYear: (new Date(DateFilterController.MIN_DATE)).getFullYear(),
+      endYear: (new Date(DateFilterController.MAX_DATE)).getFullYear(),
+      yearStep: 1,
+      initialStartYear: (new Date(this.startDate)).getFullYear(),
+      initialEndYear: (new Date(this.endDate)).getFullYear()
+    });
+    this.dateRangeSlider.subscribe("update-start", (function(_this) {
+      return function(start) {
+        _this.startDate = (new Date(start, 0)).valueOf();
+        _this.limitDatesJustInCase();
+        _this.postControllerChanges();
+        _this.updateDateRange();
+        return _this.updatePlaybackSlider();
+      };
+    })(this));
+    this.dateRangeSlider.subscribe("update-end", (function(_this) {
+      return function(end) {
+        _this.endDate = (new Date(end, 11, 31)).valueOf();
+        _this.limitDatesJustInCase();
+        _this.postControllerChanges();
+        _this.updateDateRange();
+        return _this.updatePlaybackSlider();
+      };
+    })(this));
+    this.updatePlaybackSlider();
+    this.updateDateRange();
+    this.listen("request-update", this.postControllerChanges);
+  }
+
+  DateFilterController.prototype.limitDatesJustInCase = function() {
+    this.endDate = Math.min(this.endDate, DateFilterController.MAX_DATE);
+    return this.animatedEndDate = Math.min(Math.max(this.animatedEndDate, this.startDate), this.endDate);
+  };
+
+  DateFilterController.prototype.postControllerChanges = function() {
+    return this.post("update", {
+      startDate: this.startDate,
+      endDate: this.animatedEndDate
+    });
+  };
+
+  DateFilterController.prototype.updatePlaybackSliderTextOnly = function() {
+    return this.playbackController.tell("set-text", "" + (DataFormatter.formatDate(this.animatedEndDate)));
+  };
+
+  DateFilterController.prototype.updatePlaybackSlider = function() {
+    var days, msBetweenStartAndEnd, msPerDay;
+    this.playbackController.tell("set", (this.animatedEndDate - this.startDate) / (this.endDate - this.startDate));
+    msBetweenStartAndEnd = this.endDate - this.startDate;
+    msPerDay = 1000 * 60 * 60 * 24;
+    days = (msBetweenStartAndEnd / msPerDay) | 0;
+    this.playbackController.tell("set-step", 1 / days);
+    return this.updatePlaybackSliderTextOnly();
+  };
+
+  DateFilterController.prototype.updateDateRange = function() {
+    return this.dateRangeSlider.tell("set-text", ((new Date(this.startDate)).getFullYear()) + " and " + ((new Date(this.endDate)).getFullYear()));
+  };
+
+  return DateFilterController;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/DateRangeSliderUI": function(exports, require, module) {
+  var DateRangeSliderUI, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (DateRangeSliderUI = (function(superClass) {
+  extend(DateRangeSliderUI, superClass);
+
+  function DateRangeSliderUI() {
+    DateRangeSliderUI.__super__.constructor.apply(this, arguments);
+    this.dateSliderStart = $("#date-slider-start");
+    this.dateSliderEnd = $("#date-slider-end");
+    this.dateSliderReadout = $("#date-slider-readout");
+    this.listen("configure", (function(_this) {
+      return function(options) {
+        var endYear, initialEndYear, initialStartYear, startYear, yearStep;
+        startYear = options.startYear, endYear = options.endYear, yearStep = options.yearStep, initialStartYear = options.initialStartYear, initialEndYear = options.initialEndYear;
+        _this.dateSliderStart.add(_this.dateSliderEnd).attr("min", startYear).attr("max", endYear).attr("step", yearStep);
+        _this.dateSliderStart.val(initialStartYear);
+        _this.dateSliderEnd.val(initialEndYear);
+        return _this.dateSliderStart.add(_this.dateSliderEnd).slider("refresh");
+      };
+    })(this));
+    this.dateSliderStart.on("change", (function(_this) {
+      return function() {
+        return _this.post("update-start", parseInt(_this.dateSliderStart.val()));
+      };
+    })(this));
+    this.dateSliderEnd.on("change", (function(_this) {
+      return function() {
+        return _this.post("update-end", parseInt(_this.dateSliderEnd.val()));
+      };
+    })(this));
+    this.listen("set-text", (function(_this) {
+      return function(text) {
+        return _this.dateSliderReadout.text(text);
+      };
+    })(this));
+  }
+
+  return DateRangeSliderUI;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/EarthquakeLayerManager": function(exports, require, module) {
+  
+/*
+EarthquakeLayerManager - A class to manage the Leaflet earthquake layer and populate it with points
+from the filters that lead into it
+TODO: HORRIBLY INCOMPLETE
+ */
+var DataFormatter, DateFilter, EarthquakeLayerManager, MapView, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+DateFilter = require("./DateFilter");
+
+MapView = require("./MapView");
+
+DataFormatter = require("./DataFormatter");
+
+module.exports = new (EarthquakeLayerManager = (function(superClass) {
+  extend(EarthquakeLayerManager, superClass);
+
+  function EarthquakeLayerManager() {
+    EarthquakeLayerManager.__super__.constructor.apply(this, arguments);
+    this.inputNode = DateFilter;
+    this.mapView = MapView;
+    this.earthquakesLayer = null;
+    this.cachedData = [];
+    this.inputNode.subscribe("stream", (function(_this) {
+      return function(newData) {
+        var i, len, point;
+        for (i = 0, len = newData.length; i < len; i++) {
+          point = newData[i];
+          _this.cachedData.push(point);
+        }
+        return _this.addToLayer(newData);
+      };
+    })(this));
+    this.inputNode.subscribe("flush", (function(_this) {
+      return function(freshData) {
+        _this.cachedData = freshData;
+        return _this.flushLayer(freshData);
+      };
+    })(this));
+    this.flushLayer();
+    this.flushDeferTimer = null;
+  }
+
+  EarthquakeLayerManager.FLUSH_DEFER_TIME = 300;
+
+
+  /*
+  Pretty self-explanatory, eh?
+   */
+
+  EarthquakeLayerManager.prototype.addToLayer = function(data) {
+    return this.earthquakesLayer.addData(data);
+  };
+
+
+  /*
+  Removes the current, stale layer and replaces it with a new, fresh, empty one.
+  Also used to intitialize the layer.
+  
+  NOTE: Defer re-adding fresh data to the layer
+   */
+
+  EarthquakeLayerManager.prototype.flushLayer = function(freshData) {
+    if (this.earthquakesLayer != null) {
+      this.mapView.tell("remove-layer", this.earthquakesLayer);
+    }
+    this.earthquakesLayer = L.geoJson([], {
+      pointToLayer: function(feature, latlng) {
+        var depth, magnitude, marker, style;
+        depth = feature.geometry.coordinates[2];
+        magnitude = feature.properties.mag;
+        style = {
+          clickable: true,
+          weight: 1.5,
+          opacity: 0.2,
+          color: "#000",
+          fillOpacity: 0.8,
+          fillColor: DataFormatter.depthToColor(depth),
+          radius: DataFormatter.magnitudeToRadius(magnitude)
+        };
+        marker = L.circleMarker(latlng, style);
+        marker.bindPopup("Place: <b>" + feature.properties.place + "</b></br>\nMagnitude: <b>" + (DataFormatter.formatMagnitude(magnitude)) + "</b></br>\nDate: <b>" + (DataFormatter.formatDate(feature.properties.time)) + "</b></br>\nDepth: <b>" + depth + " km</b>");
+        return marker;
+      }
+    });
+    this.mapView.tell("add-layer", this.earthquakesLayer);
+    if (freshData != null) {
+      if (this.flushDeferTimer != null) {
+        clearTimeout(this.flushDeferTimer);
+      }
+      return this.flushDeferTimer = setTimeout((function(_this) {
+        return function() {
+          return _this.addToLayer(freshData);
+        };
+      })(this), EarthquakeLayerManager.FLUSH_DEFER_TIME);
+    }
+  };
+
+  return EarthquakeLayerManager;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/MagnitudeFilter": function(exports, require, module) {
+  
+/*
+MagnitudeFilter - a class to receive a bunch of earthquakes, and pass on the ones that are greater
+than a specified magnitude
+
+See DateFilter's header comment for more info on filters.
+ */
+var CacheFilter, DateFilter, MagnitudeFilterController, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+CacheFilter = require("./CacheFilter");
+
+MagnitudeFilterController = require("./MagnitudeFilterController");
+
+module.exports = new (DateFilter = (function(superClass) {
+  extend(DateFilter, superClass);
+
+  function DateFilter() {
+    DateFilter.__super__.constructor.apply(this, arguments);
+    this.controller = MagnitudeFilterController;
+    this.minMagnitude = -Infinity;
+    this.maxMagnitude = Infinity;
+    this.controller.subscribe("update", (function(_this) {
+      return function(updatedFilter) {
+        var additionalPoints;
+        updatedFilter.maxMagnitude = Infinity;
+        if (updatedFilter.minMagnitude > _this.minMagnitude || updatedFilter.maxMagnitude < _this.maxMagnitude) {
+          _this.post("flush", _this.filterMagnitudes(_this.cachedData, updatedFilter.minMagnitude, updatedFilter.maxMagnitude));
+        } else {
+          additionalPoints = [];
+          _this.filterMagnitudes(_this.cachedData, updatedFilter.minMagnitude, _this.minMagnitude, additionalPoints);
+          _this.filterMagnitudes(_this.cachedData, _this.maxMagnitude, updatedFilter.maxMagnitude, additionalPoints);
+          if (additionalPoints.length > 0) {
+            _this.post("stream", additionalPoints);
+          }
+        }
+        _this.minMagnitude = updatedFilter.minMagnitude;
+        return _this.maxMagnitude = updatedFilter.maxMagnitude;
+      };
+    })(this));
+    this.cachedData = [];
+    this.inputNode = CacheFilter;
+    this.inputNode.subscribe("stream", (function(_this) {
+      return function(newData) {
+        var i, len, point;
+        for (i = 0, len = newData.length; i < len; i++) {
+          point = newData[i];
+          _this.cachedData.push(point);
+        }
+        return _this.post("stream", _this.filterMagnitudes(newData, _this.minMagnitude, _this.maxMagnitude));
+      };
+    })(this));
+    this.inputNode.subscribe("flush", (function(_this) {
+      return function(freshData) {
+        _this.cachedData = freshData;
+        return _this.post("flush", _this.filterMagnitudes(_this.cachedData, _this.minMagnitude, _this.maxMagnitude));
+      };
+    })(this));
+    this.inputNode.tell("request-update");
+  }
+
+
+  /*
+  Creates a new array and fills it with the dataset, diced with given parameters
+  Note: minMagnitude is inclusive, maxMagnitude is exclusive
+   */
+
+  DateFilter.prototype.filterMagnitudes = function(data, minMagnitude, maxMagnitude, newArray) {
+    var i, len, point, ref;
+    if (newArray == null) {
+      newArray = [];
+    }
+    for (i = 0, len = data.length; i < len; i++) {
+      point = data[i];
+      if ((minMagnitude <= (ref = point.properties.mag) && ref < maxMagnitude)) {
+        newArray.push(point);
+      }
+    }
+    return newArray;
+  };
+
+  return DateFilter;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/MagnitudeFilterController": function(exports, require, module) {
+  
+/*
+A class to manage the magnitude filter, tying together the UI
+and the data filter
+ */
+var DataFormatter, MagnitudeFilterController, MagnitudeSliderUI, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+MagnitudeSliderUI = require("./MagnitudeSliderUI");
+
+DataFormatter = require("./DataFormatter");
+
+module.exports = new (MagnitudeFilterController = (function(superClass) {
+  extend(MagnitudeFilterController, superClass);
+
+  MagnitudeFilterController.MIN_MAGNITUDE = 3;
+
+  MagnitudeFilterController.MAX_MAGNITUDE = 9;
+
+  function MagnitudeFilterController() {
+    MagnitudeFilterController.__super__.constructor.apply(this, arguments);
+    this.minMagnitude = 5;
+    this.uiMagnitudeSlider = MagnitudeSliderUI;
+    this.uiMagnitudeSlider.subscribe("update", (function(_this) {
+      return function(value) {
+        _this.minMagnitude = value;
+        _this.postControllerChanges();
+        return _this.updateMagnitudeSlider();
+      };
+    })(this));
+    this.uiMagnitudeSlider.tell("configure", {
+      minMagnitude: MagnitudeFilterController.MIN_MAGNITUDE,
+      maxMagnitude: MagnitudeFilterController.MAX_MAGNITUDE,
+      magnitudeStep: 0.1,
+      initialMinMagnitude: this.minMagnitude
+    });
+    this.updateMagnitudeSlider();
+    this.listen("request-update", this.postControllerChanges);
+  }
+
+  MagnitudeFilterController.prototype.postControllerChanges = function() {
+    return this.post("update", {
+      minMagnitude: this.minMagnitude
+    });
+  };
+
+  MagnitudeFilterController.prototype.updateMagnitudeSlider = function() {
+    return this.uiMagnitudeSlider.tell("set-text", "" + (DataFormatter.formatMagnitude(this.minMagnitude)));
+  };
+
+  return MagnitudeFilterController;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/MagnitudeSliderUI": function(exports, require, module) {
+  
+/*
+A class to manage the magnitude slider
+ */
+var MagnitudeSliderUI, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (MagnitudeSliderUI = (function(superClass) {
+  extend(MagnitudeSliderUI, superClass);
+
+  function MagnitudeSliderUI() {
+    var preventChangeFromHappenningHack;
+    MagnitudeSliderUI.__super__.constructor.apply(this, arguments);
+    preventChangeFromHappenningHack = false;
+    this.magnitudeSlider = $("#magnitude-slider");
+    this.magnitudeSliderReadout = $("#magnitude-readout");
+    this.listen("configure", (function(_this) {
+      return function(options) {
+        var initialMinMagnitude, magnitudeStep, maxMagnitude, minMagnitude;
+        minMagnitude = options.minMagnitude, maxMagnitude = options.maxMagnitude, magnitudeStep = options.magnitudeStep, initialMinMagnitude = options.initialMinMagnitude;
+        _this.magnitudeSlider.attr("min", minMagnitude).attr("max", maxMagnitude).attr("step", magnitudeStep);
+        _this.magnitudeSlider.val(initialMinMagnitude);
+        return _this.magnitudeSlider.slider("refresh");
+      };
+    })(this));
+    this.magnitudeSlider.on("change", (function(_this) {
+      return function() {
+        if (!preventChangeFromHappenningHack) {
+          return _this.post("update", parseFloat(_this.magnitudeSlider.val()));
+        }
+      };
+    })(this));
+    this.listen("set", function(value) {
+      preventChangeFromHappenningHack = true;
+      this.magnitudeSlider.val(sliderVal).slider("refresh");
+      return preventChangeFromHappenningHack = false;
+    });
+    this.listen("set-text", function(text) {
+      return this.magnitudeSliderReadout.text(text);
+    });
+  }
+
+  return MagnitudeSliderUI;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/MapKeyController": function(exports, require, module) {
+  
+/*
+An all-in-one class to manage the map key, populating it as well as showing/hiding it.
+Could perhaps be split into multiple classes
+ */
+var DataFormatter, MapKeyController, MapKeyToggleUI, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+DataFormatter = require("./DataFormatter");
+
+MapKeyToggleUI = require("./MapKeyToggleUI");
+
+module.exports = new (MapKeyController = (function(superClass) {
+  extend(MapKeyController, superClass);
+
+  function MapKeyController() {
+    var depth, magnitude, radius;
+    this.mapKey = $("#map-key");
+    this.mapKey.find(".magnitude-key").html(((function() {
+      var i, results;
+      results = [];
+      for (magnitude = i = 3; i <= 9; magnitude = ++i) {
+        radius = DataFormatter.magnitudeToRadius(magnitude);
+        results.push("<div class=\"magnitude-item\">\n  <div class=\"magnitude-example\" style=\"width: " + (2 * radius) + "px; height: " + (2 * radius) + "px;margin-left: " + (-radius) + "px; margin-top: " + (-radius) + "px;\"></div>\n  " + (DataFormatter.formatMagnitude(magnitude)) + "\n</div>");
+      }
+      return results;
+    })()).join(""));
+    this.mapKey.find(".depth-key > .labels").html(((function() {
+      var i, ref, results;
+      results = [];
+      for (depth = i = 0, ref = DataFormatter.MAX_DEPTH; i <= ref; depth = i += 100) {
+        results.push("<p>" + depth + " km</p>");
+      }
+      return results;
+    })()).join(""));
+    this.mapKeyToggle = MapKeyToggleUI;
+    this.keyVisible = false;
+    this.mapKey.hide();
+    this.mapKeyToggle.subscribe("update", (function(_this) {
+      return function(value) {
+        _this.keyVisible = value;
+        if (_this.keyVisible) {
+          return _this.mapKey.finish().fadeIn(300);
+        } else {
+          return _this.mapKey.finish().fadeOut(300);
+        }
+      };
+    })(this));
+  }
+
+  return MapKeyController;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/MapKeyToggleUI": function(exports, require, module) {
+  
+/*
+A class to manage the map key toggle switch
+ */
+var MapKeyToggleUI, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (MapKeyToggleUI = (function(superClass) {
+  extend(MapKeyToggleUI, superClass);
+
+  function MapKeyToggleUI() {
+    var preventChangeFromHappenningHack;
+    MapKeyToggleUI.__super__.constructor.apply(this, arguments);
+    preventChangeFromHappenningHack = false;
+    this.mapKey = $("#map-key-toggle");
+    this.mapKey.on("change", (function(_this) {
+      return function() {
+        if (!preventChangeFromHappenningHack) {
+          return _this.post("update", _this.mapKey.parent().hasClass("ui-flipswitch-active"));
+        }
+      };
+    })(this));
+    this.listen("set", (function(_this) {
+      return function(value) {
+        preventChangeFromHappenningHack = true;
+        if (value) {
+          _this.mapKey.parent().addClass("ui-flipswitch-active");
+        } else {
+          _this.mapKey.parent().removeClass("ui-flipswitch-active");
+        }
+        return preventChangeFromHappenningHack = false;
+      };
+    })(this));
+  }
+
+  return MapKeyToggleUI;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/MapView": function(exports, require, module) {
+  
+/*
+MapView - a class for creating a leaflet map and exposing parts of the map
+as an interface to child classes
+ */
+var MapView, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (MapView = (function(superClass) {
+  extend(MapView, superClass);
+
+  function MapView() {
+    MapView.__super__.constructor.apply(this, arguments);
+    this.leafletMap = L.map("map", {
+      worldCopyJump: true
+    });
+    $(window).on("load", (function(_this) {
+      return function() {
+        _this.leafletMap.fitBounds(L.latLngBounds(L.latLng(-50, -40), L.latLng(50, 40)));
+        return _this.leafletMap.invalidateSize(true);
+      };
+    })(this));
+    this.listen("add-layer", (function(_this) {
+      return function(layer) {
+        return _this.leafletMap.addLayer(layer);
+      };
+    })(this));
+    this.listen("remove-layer", (function(_this) {
+      return function(layer) {
+        return _this.leafletMap.removeLayer(layer);
+      };
+    })(this));
+  }
+
+  return MapView;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/NNode": function(exports, require, module) {
+  
+/*
+A small and lightweight class to streamline and standardize communication between
+objects, as if each were a node in a larger network
+ */
+var NNode,
+  slice = [].slice;
+
+module.exports = NNode = (function() {
+  function NNode() {
+    this.listenerMap = {};
+    this.subscriberListenerMap = {};
+  }
+
+
+  /*
+  News onhand! Tell this to all eager subscribers.
+   */
+
+  NNode.prototype.post = function() {
+    var channel, data;
+    channel = arguments[0], data = 2 <= arguments.length ? slice.call(arguments, 1) : [];
+    return this._activateListeners(this.subscriberListenerMap, channel, data);
+  };
+
+
+  /*
+  Subscribe to a popular node to keep updated.
+  All news will be prepended with the namespace, if given
+   */
+
+  NNode.prototype.subscribe = function(channel, listener) {
+    this._addToListenerMap(this.subscriberListenerMap, channel, listener);
+  };
+
+
+  /*
+  Tells this node a very personal message.
+   */
+
+  NNode.prototype.tell = function() {
+    var channel, data;
+    channel = arguments[0], data = 2 <= arguments.length ? slice.call(arguments, 1) : [];
+    this._activateListeners(this.listenerMap, channel, data);
+  };
+
+
+  /*
+  Registers this node to hear any type of message.
+   */
+
+  NNode.prototype.listen = function(channel, listener) {
+    this._addToListenerMap(this.listenerMap, channel, listener);
+  };
+
+  NNode.prototype._addToListenerMap = function(map, channel, listener) {
+    if (map[channel] == null) {
+      map[channel] = [];
+    }
+    this._addToSet(map[channel], listener);
+  };
+
+  NNode.prototype._activateListeners = function(map, channel, data) {
+    var i, len, listener, ref;
+    if (map[channel] != null) {
+      ref = map[channel];
+      for (i = 0, len = ref.length; i < len; i++) {
+        listener = ref[i];
+        listener.apply(this, data);
+      }
+    }
+  };
+
+  NNode.prototype._addToSet = function(array, value) {
+    if (array.indexOf(value) === -1) {
+      array.push(value);
+    }
+  };
+
+  return NNode;
+
+})();
+
+
+}});
+
+require.define({"2D/PlaybackButtonsUI": function(exports, require, module) {
+  
+/*
+A small class to manage the playback buttons
+ */
+var NNode, PlaybackButtonsUI,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (PlaybackButtonsUI = (function(superClass) {
+  extend(PlaybackButtonsUI, superClass);
+
+  function PlaybackButtonsUI() {
+    PlaybackButtonsUI.__super__.constructor.apply(this, arguments);
+    this.slowDown = $("#slowdown");
+    this.playPause = $("#playpause");
+    this.speedUp = $("#speedup");
+    this.slowDown.click((function(_this) {
+      return function() {
+        return _this.post("update", "slowdown");
+      };
+    })(this));
+    this.playPause.click((function(_this) {
+      return function() {
+        return _this.post("update", "playpause");
+      };
+    })(this));
+    this.speedUp.click((function(_this) {
+      return function() {
+        return _this.post("update", "speedup");
+      };
+    })(this));
+    this.listen("set-play-or-pause", function(playOrPause) {
+      switch (playOrPause) {
+        case "play":
+          return this.becomePlayButton();
+        case "pause":
+          return this.becomePauseButton();
+      }
+    });
+  }
+
+  PlaybackButtonsUI.prototype.becomePlayButton = function() {
+    this.playPause.removeClass("ui-icon-fa-pause");
+    return this.playPause.addClass("ui-icon-fa-play");
+  };
+
+  PlaybackButtonsUI.prototype.becomePauseButton = function() {
+    this.playPause.addClass("ui-icon-fa-pause");
+    return this.playPause.removeClass("ui-icon-fa-play");
+  };
+
+  return PlaybackButtonsUI;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/PlaybackController": function(exports, require, module) {
+  
+/*
+PlaybackController
+A class to manage playing, pausing, speeding up, and slowing down.
+Communicates with the UI's buttons and timeline slider.
+ */
+var NNode, PlaybackButtonsUI, PlaybackController, PlaybackSliderUI,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+PlaybackButtonsUI = require("./PlaybackButtonsUI");
+
+PlaybackSliderUI = require("./PlaybackSliderUI");
+
+NNode = require("./NNode");
+
+module.exports = new (PlaybackController = (function(superClass) {
+  extend(PlaybackController, superClass);
+
+
+  /*
+  Creates a new PlaybackController.
+  Also rigs up the provided UI elements.
+   */
+
+  function PlaybackController() {
+    PlaybackController.__super__.constructor.apply(this, arguments);
+    this.timeline = new TimelineLite({
+      onUpdate: (function(_this) {
+        return function() {
+          var progress;
+          progress = _this.timeline.progress();
+          _this.post("update", progress);
+          _this.playbackSlider.tell("set", progress);
+          if (progress === 1) {
+            return _this.pauseOnly();
+          }
+        };
+      })(this),
+      paused: true
+    });
+    this.duration = 16;
+    this._updateTimelineScale();
+    this.timeline.addPause(1);
+    this.playbackButtons = PlaybackButtonsUI;
+    this.playbackButtons.subscribe("update", (function(_this) {
+      return function(which) {
+        switch (which) {
+          case "slowdown":
+            return _this.slowDown();
+          case "playpause":
+            return _this.playPause();
+          case "speedup":
+            return _this.speedUp();
+        }
+      };
+    })(this));
+    this.playbackSlider = PlaybackSliderUI;
+    this.playbackSlider.subscribe("update", (function(_this) {
+      return function(progress) {
+        _this.pauseOnly();
+        return _this.timeline.progress(progress);
+      };
+    })(this));
+    this.listen("set", (function(_this) {
+      return function(value) {
+        return _this.timeline.progress(value);
+      };
+    })(this));
+    this.listen("set-text", (function(_this) {
+      return function(text) {
+        return _this.playbackSlider.tell("set-text", text);
+      };
+    })(this));
+    this.listen("set-step", (function(_this) {
+      return function(step) {
+        return _this.playbackSlider.tell("set-step", step);
+      };
+    })(this));
+  }
+
+
+  /*
+  Standard playback control methods. Does what you expect them to do.
+   */
+
+  PlaybackController.prototype.slowDown = function() {
+    if (this.duration < 128) {
+      this.duration *= 2;
+    }
+    return this._updateTimelineScale();
+  };
+
+  PlaybackController.prototype.speedUp = function() {
+    if (this.duration > 2) {
+      this.duration /= 2;
+    }
+    return this._updateTimelineScale();
+  };
+
+  PlaybackController.prototype.pauseOnly = function() {
+    this.timeline.pause();
+    return this.playbackButtons.tell("set-play-or-pause", "play");
+  };
+
+  PlaybackController.prototype.playPause = function() {
+    if (this.timeline.isActive()) {
+      return this.pauseOnly();
+    } else {
+      if (this.timeline.progress() === 1) {
+        this.timeline.restart();
+      } else {
+        this.timeline.play();
+      }
+      return this.playbackButtons.tell("set-play-or-pause", "pause");
+    }
+  };
+
+  PlaybackController.prototype._updateTimelineScale = function() {
+    return this.timeline.timeScale(1 / this.duration);
+  };
+
+  return PlaybackController;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/PlaybackSliderUI": function(exports, require, module) {
+  
+/*
+A small class to hook up the playback slider
+ */
+var NNode, PlaybackSliderUI,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (PlaybackSliderUI = (function(superClass) {
+  extend(PlaybackSliderUI, superClass);
+
+  function PlaybackSliderUI() {
+    var preventChangeFromHappenningHack;
+    PlaybackSliderUI.__super__.constructor.apply(this, arguments);
+    preventChangeFromHappenningHack = false;
+    this.slider = $("#slider");
+    this.sliderHandle = $("#slider-wrapper .ui-slider-handle");
+    this.slider.on("change", (function(_this) {
+      return function() {
+        if (!preventChangeFromHappenningHack) {
+          return _this.post("update", parseFloat(_this.slider.val()));
+        }
+      };
+    })(this));
+    this.listen("set", (function(_this) {
+      return function(value) {
+        preventChangeFromHappenningHack = true;
+        _this.slider.val(value).slider("refresh");
+        return preventChangeFromHappenningHack = false;
+      };
+    })(this));
+    this.listen("set-text", (function(_this) {
+      return function(text) {
+        _this.sliderHandle.text(text);
+        return _this.sliderHandle.attr("title", text);
+      };
+    })(this));
+    this.listen("set-step", (function(_this) {
+      return function(step) {
+        return _this.slider.attr("step", step);
+      };
+    })(this));
+  }
+
+  return PlaybackSliderUI;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/Utils": function(exports, require, module) {
+
+  
+
+}});
+
+;require.define({"2D/app": function(exports, require, module) {
+  var App, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = App = (function(superClass) {
+  extend(App, superClass);
+
+  function App() {
+    App.__super__.constructor.apply(this, arguments);
+    $(document).on("pagecreate", (function(_this) {
+      return function() {
+        _this.superHackySliderKeyboardHack();
+        require("./EarthquakeLayerManager");
+        require("./BoundariesLayerManager");
+        require("./BaseMapLayerManager");
+        require("./ControlsManager");
+        return require("./MapKeyController");
+      };
+    })(this));
+  }
+
+  App.prototype.superHackySliderKeyboardHack = function() {
+    return $("#slider-wrapper .ui-slider-handle").keydown(function(event) {
+      var input, newValue;
+      input = $(this).parents(".ui-slider").find("input");
+      switch (event.keyCode) {
+        case $.mobile.keyCode.HOME:
+          newValue = parseFloat(input.attr("min"));
+          break;
+        case $.mobile.keyCode.END:
+          newValue = parseFloat(input.attr("max"));
+          break;
+        case $.mobile.keyCode.PAGE_UP:
+        case $.mobile.keyCode.UP:
+        case $.mobile.keyCode.LEFT:
+          newValue = parseFloat(input.val()) - parseFloat(input.attr("step"));
+          break;
+        case $.mobile.keyCode.PAGE_DOWN:
+        case $.mobile.keyCode.DOWN:
+        case $.mobile.keyCode.RIGHT:
+          newValue = parseFloat(input.val()) + parseFloat(input.attr("step"));
+          break;
+        default:
+          return;
+      }
+      input.val(newValue);
+      return $(input).slider("refresh");
+    });
+  };
+
+  return App;
+
+})(NNode);
 
 
 }});
@@ -1135,20 +2085,20 @@ L.Tooltip = L.Class.extend({
 
 require.define({"2D/extensions/custom-polyline": function(exports, require, module) {
   var CustomPolyline,
-  __hasProp = {}.hasOwnProperty,
-  __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; };
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
 
-CustomPolyline = (function(_super) {
-  __extends(CustomPolyline, _super);
+CustomPolyline = (function(superClass) {
+  extend(CustomPolyline, superClass);
 
   function CustomPolyline() {
     return CustomPolyline.__super__.constructor.apply(this, arguments);
   }
 
   CustomPolyline.prototype._onMouseUp = function(e) {
-    var _ref;
+    var ref;
     CustomPolyline.__super__._onMouseUp.apply(this, arguments);
-    if (((_ref = this._markers) != null ? _ref.length : void 0) === 2) {
+    if (((ref = this._markers) != null ? ref.length : void 0) === 2) {
       return this._finishShape();
     }
   };
@@ -1162,7 +2112,534 @@ module.exports = CustomPolyline;
 
 }});
 
-require.define({"2D/magnitude-search": function(exports, require, module) {
+require.define({"2D/thisfolderisacomment/app": function(exports, require, module) {
+  var App, Map, MapController;
+
+Map = require('2D/map');
+
+MapController = require('2D/map-controller');
+
+App = (function() {
+  function App() {
+    this.util = require('common/util');
+    this.map = new Map();
+    this.controller = new MapController(this.map);
+    $("#index").on("pageshow", (function(_this) {
+      return function(event, ui) {
+        $.mobile.loading('show');
+        _this.map.leafletMap.invalidateSize(true);
+        _this.map.layers.baseLayer2.addTo(_this.map.leafletMap);
+        if ((_this.map.parameters.center != null) && (_this.map.parameters.zoom != null)) {
+          _this.map.leafletMap.setView(_this.map.parameters.center, _this.map.parameters.zoom);
+        } else {
+          _this.map.leafletMap.fitBounds(L.latLngBounds(_this.map.parameters.nw, _this.map.parameters.se));
+        }
+        _this.controller.initController();
+        _this.controller.timeLine.timeScale(_this.controller.speed);
+        _this.controller.timeLine.pause();
+        $.mobile.loading('hide');
+        setTimeout(function() {
+          return _this.map.leafletMap.invalidateSize();
+        }, 1);
+        return _this.init();
+      };
+    })(this));
+  }
+
+  App.prototype.init = function() {
+    var drawingMode, elem, maxSelected, minSelected, removeDrawingTool, startDrawingTool, updateShareLink;
+    $('#play').click((function(_this) {
+      return function() {
+        return _this.controller.timeLine.resume();
+      };
+    })(this));
+    $('#pause').click((function(_this) {
+      return function() {
+        return _this.controller.timeLine.pause();
+      };
+    })(this));
+    $('#speedup').click((function(_this) {
+      return function() {
+        _this.controller.speed *= 1.5;
+        return _this.controller.timeLine.timeScale(_this.controller.speed);
+      };
+    })(this));
+    $('#speeddown').click((function(_this) {
+      return function() {
+        if (_this.controller.speed >= 0.5) {
+          _this.controller.speed /= 2;
+          return _this.controller.timeLine.timeScale(_this.controller.speed);
+        }
+      };
+    })(this));
+    $('#changeparams').click((function(_this) {
+      return function() {
+        return _this.controller.timeLine.pause();
+      };
+    })(this));
+    $('#editparamscancel').click((function(_this) {
+      return function() {
+        return _this.controller.timeLine.resume();
+      };
+    })(this));
+    $('#editparamsenter').click((function(_this) {
+      return function() {
+        return _this.controller.timeLine.pause();
+      };
+    })(this));
+    if (this.map.parameters.timeline) {
+      $('#options-button').attr('href', '#options-details');
+    }
+    $('#daterange').dateRangeSlider({
+      arrows: false,
+      bounds: {
+        min: new Date(1900, 0, 1),
+        max: Date.now()
+      },
+      defaultValues: {
+        min: new Date(this.map.parameters.startdate),
+        max: new Date(this.map.parameters.enddate)
+      },
+      scales: [
+        {
+          next: function(value) {
+            var n;
+            n = new Date(value);
+            return new Date(n.setYear(value.getFullYear() + 20));
+          },
+          label: function(value) {
+            return value.getFullYear();
+          }
+        }
+      ]
+    });
+    $('#magnitude-slider').val(this.map.parameters.desiredMag || this.map.parameters.mag).slider('refresh');
+    $.datepicker.setDefaults({
+      minDate: new Date(1900, 0, 1),
+      maxDate: 0,
+      changeMonth: true,
+      changeYear: true
+    });
+    minSelected = function(dateText) {
+      var newDate, prevVals;
+      prevVals = $('#daterange').dateRangeSlider('values');
+      newDate = new Date(dateText);
+      return $('#daterange').dateRangeSlider('values', newDate, prevVals.max);
+    };
+    maxSelected = function(dateText) {
+      var newDate, prevVals;
+      prevVals = $('#daterange').dateRangeSlider('values');
+      newDate = new Date(dateText);
+      return $('#daterange').dateRangeSlider('values', prevVals.min, newDate);
+    };
+    $('.ui-rangeSlider-leftLabel').click(function(evt) {
+      return $('.ui-rangeSlider-leftLabel').datepicker('dialog', $('#daterange').dateRangeSlider('values').min, minSelected, {}, evt);
+    });
+    $('.ui-rangeSlider-rightLabel').click(function(evt) {
+      return $('.ui-rangeSlider-rightLabel').datepicker('dialog', $('#daterange').dateRangeSlider('values').max, maxSelected, {}, evt);
+    });
+    updateShareLink = (function(_this) {
+      return function() {
+        var query, range, url;
+        range = $('#daterange').dateRangeSlider('values');
+        query = _this.util.queryString(_this.map, {
+          startdate: _this.util.usgsDate(range.min),
+          enddate: _this.util.usgsDate(range.max),
+          mag: $('#magnitude-slider').val()
+        });
+        url = window.location.origin + window.location.pathname + query;
+        $('#share-link').attr("href", url);
+        return $('#share-link').text(url);
+      };
+    })(this);
+    elem = null;
+    $('#getQuakeCount').click((function(_this) {
+      return function() {
+        var endtime, range, starttime;
+        $(_this).addClass('ui-disabled');
+        $('#quake-count').html("Earthquakes: ???");
+        range = $('#daterange').dateRangeSlider('values');
+        starttime = _this.util.usgsDate(range.min);
+        endtime = _this.util.usgsDate(range.max);
+        elem = document.createElement('script');
+        elem.src = "http://earthquake.usgs.gov/fdsnws/event/1/count?starttime=" + starttime + "&endtime=" + endtime + "&eventtype=earthquake&format=geojson" + (_this.geojsonParams());
+        elem.id = 'quake-count-script';
+        document.body.appendChild(elem);
+        return updateShareLink();
+      };
+    })(this));
+    window.updateQuakeCount = function(result) {
+      $('#quake-count').html("Earthquakes: " + result.count);
+      elem = document.getElementById('quake-count-script');
+      document.body.removeChild(elem);
+      return $('#getQuakeCount').removeClass('ui-disabled');
+    };
+    $('#loadSelectedData').click((function(_this) {
+      return function() {
+        var range;
+        range = $('#daterange').dateRangeSlider('values');
+        _this.map.parameters.startdate = _this.util.usgsDate(range.min);
+        _this.map.parameters.enddate = _this.util.usgsDate(range.max);
+        _this.map.parameters.desiredMag = $('#magnitude-slider').val();
+        _this.controller.reloadData();
+        history.pushState({
+          mapParams: _this.map.parameters
+        }, 'Seismic Eruptions', _this.util.queryString(_this.map));
+        return updateShareLink();
+      };
+    })(this));
+    $('#share-wrapper').hide();
+    $('#shareSelectedData').click(function() {
+      updateShareLink();
+      return $('#share-wrapper').show();
+    });
+    drawingMode = false;
+    $('#drawingTool').click((function(_this) {
+      return function() {
+        var i, j, ref;
+        if (!drawingMode) {
+          _this.controller.timeLine.pause();
+          $.mobile.loading('show');
+          $('#crosssection').fadeIn();
+          for (i = j = 0, ref = _this.map.values.size; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
+            if (!_this.map.leafletMap.hasLayer(_this.map.earthquakes.circles[i])) {
+              _this.map.earthquakes.circles[i].setStyle({
+                fillOpacity: 0.5,
+                fillColor: "#" + _this.controller.rainbow.colourAt(_this.map.earthquakes.depth[i])
+              });
+              _this.map.earthquakes.circles[i].addTo(_this.map.leafletMap);
+            }
+          }
+          $.mobile.loading('hide');
+          return drawingMode = true;
+        }
+      };
+    })(this));
+    $('#drawingToolDone').click((function(_this) {
+      return function() {
+        if (drawingMode) {
+          $.mobile.loading('show');
+          $('#crosssection').fadeOut();
+          $.mobile.loading('hide');
+          drawingMode = false;
+          return _this.map.leafletMap.setZoom(2);
+        }
+      };
+    })(this));
+    $('#mapselector').change((function(_this) {
+      return function() {
+        if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer1)) {
+          _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer1);
+        }
+        if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer2)) {
+          _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer2);
+        }
+        if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer3)) {
+          _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer3);
+        }
+        switch ($('#mapselector').val()) {
+          case '1':
+            _this.map.layers.baseLayer1.addTo(_this.map.leafletMap);
+            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer2)) {
+              _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer2);
+            }
+            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer3)) {
+              return _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer3);
+            }
+            break;
+          case '2':
+            _this.map.layers.baseLayer2.addTo(_this.map.leafletMap);
+            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer3)) {
+              _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer3);
+            }
+            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer1)) {
+              return _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer1);
+            }
+            break;
+          case '3':
+            _this.map.layers.baseLayer3.addTo(_this.map.leafletMap);
+            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer2)) {
+              _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer2);
+            }
+            if (_this.map.leafletMap.hasLayer(_this.map.layers.baseLayer1)) {
+              return _this.map.leafletMap.removeLayer(_this.map.layers.baseLayer1);
+            }
+        }
+      };
+    })(this));
+    $('#date-1-y').change(function() {
+      return loadCount(1);
+    });
+    $('#date-1-m').change(function() {
+      return loadCount(1);
+    });
+    $('#date-2-y').change(function() {
+      return loadCount(1);
+    });
+    $('#date-2-m').change(function() {
+      return loadCount(1);
+    });
+    startDrawingTool = function() {
+      var i, j, ref;
+      $('#overlay').fadeIn();
+      $('#startDrawingToolButton').fadeOut();
+      $('#Drawingtools').fadeIn();
+      $("#slider").slider({
+        disabled: true
+      });
+      document.getElementById("play").disabled = true;
+      document.getElementById("pause").disabled = true;
+      document.getElementById("speedup").disabled = true;
+      document.getElementById("speeddown").disabled = true;
+      tl.pause();
+      for (i = j = 0, ref = this.map.values.size; j < ref; i = j += 1) {
+        if (!this.map.leafletMap.hasLayer(this.map.earthquakes.circles[i])) {
+          this.map.earthquakes.circles[i].setStyle({
+            fillOpacity: 0.5,
+            fillColor: "#" + this.controller.rainbow.colourAt(this.map.earthquakes.depth[i])
+          });
+          this.map.earthquakes.circles[i].addTo(this.map.leafletMap);
+        }
+      }
+      return $('#overlay').fadeOut();
+    };
+    return removeDrawingTool = function() {
+      $('#overlay').fadeIn();
+      $('#startDrawingToolButton').fadeIn();
+      $('#Drawingtools').fadeOut();
+      $("#slider").slider({
+        disabled: false
+      });
+      document.getElementById("play").disabled = false;
+      document.getElementById("pause").disabled = false;
+      document.getElementById("speedup").disabled = false;
+      document.getElementById("speeddown").disabled = false;
+      return $('#overlay').fadeOut();
+    };
+  };
+
+  App.prototype.geojsonParams = function() {
+    var bounds, latSpan, lngSpan, mag, nw, se, url;
+    bounds = this.map.leafletMap.getBounds();
+    nw = bounds.getNorthWest();
+    se = bounds.getSouthEast();
+    mag = $('#magnitude-slider').val();
+    latSpan = nw.lat - se.lat;
+    lngSpan = se.lng - nw.lng;
+    if (latSpan >= 180 || latSpan <= -180) {
+      nw.lat = 90;
+      se.lat = -90;
+    }
+    if (lngSpan >= 180 || lngSpan <= -180) {
+      nw.lng = -180;
+      se.lng = 180;
+    }
+    url = "&minmagnitude=" + mag + "&minlatitude=" + se.lat + "&maxlatitude=" + nw.lat + "&minlongitude=" + nw.lng + "&maxlongitude=" + se.lng + "&callback=updateQuakeCount";
+    return url;
+  };
+
+  return App;
+
+})();
+
+module.exports = App;
+
+
+}});
+
+require.define({"2D/thisfolderisacomment/cross-section": function(exports, require, module) {
+  var CrossSection, CustomPolyline;
+
+CustomPolyline = require('2D/extensions/custom-polyline');
+
+CrossSection = (function() {
+  CrossSection.prototype.width = 1.5;
+
+  CrossSection.prototype.lineOptions = {
+    stroke: true,
+    color: '#ff0000',
+    weight: 4,
+    opacity: 0.5,
+    fill: false,
+    clickable: true
+  };
+
+  CrossSection.prototype.points = [];
+
+  CrossSection.prototype._featureGroup = null;
+
+  CrossSection.prototype._line = null;
+
+  CrossSection.prototype._rect = null;
+
+  function CrossSection(map) {
+    var polyline;
+    this.map = map;
+    this._featureGroup = new L.LayerGroup();
+    this._editMarkerGroup = new L.LayerGroup();
+    this.map.addLayer(this._featureGroup);
+    this.map.addLayer(this._editMarkerGroup);
+    polyline = new CustomPolyline(this.map);
+    polyline.enable();
+    this._line = new L.Polyline([], this.lineOptions);
+    this._rect = new L.polygon([]);
+    this.map.on('draw:created', (function(_this) {
+      return function(e) {
+        return _this.handleCreate(e);
+      };
+    })(this));
+  }
+
+  CrossSection.prototype.handleCreate = function(e) {
+    var p0, p1, ref;
+    ref = e.layer.getLatLngs(), p0 = ref[0], p1 = ref[1];
+    this._updateLine(p0, p1);
+    this._updateRect(p0, p1);
+    this._createEditControls();
+    this.current = {
+      center: this.map.getCenter(),
+      zoom: this.map.getZoom()
+    };
+    if (this._rect != null) {
+      return this.map.fitBounds(this._rect.getBounds());
+    }
+  };
+
+  CrossSection.prototype.destroy = function() {
+    this.map.removeLayer(this._featureGroup);
+    this.map.removeLayer(this._editMarkerGroup);
+    return this.map.setView(this.current.center, this.current.zoom);
+  };
+
+  CrossSection.prototype._updateLine = function(p0, p1) {
+    this._line.setLatLngs([p0, p1]);
+    if (!this._featureGroup.hasLayer(this._line)) {
+      this._featureGroup.addLayer(this._line);
+    }
+    return this._line;
+  };
+
+  CrossSection.prototype._updateRect = function(p0, p1) {
+    var c0, c1, c3, dLat, dLng, dir, distance, dx, dy, n0, r0, r1, r2, r3;
+    c0 = this.map.latLngToContainerPoint(p0);
+    c1 = this.map.latLngToContainerPoint(p1);
+    dir = this._direction(c0, c1);
+    dLng = this.width * Math.cos(dir + Math.PI / 2);
+    dLat = this.width * Math.sin(dir + Math.PI / 2);
+    n0 = L.latLng(p0.lat + dLat, p0.lng + dLng);
+    c3 = this.map.latLngToContainerPoint(n0);
+    distance = c0.distanceTo(c3);
+    dx = distance * Math.cos(dir + Math.PI / 2);
+    dy = distance * Math.sin(dir + Math.PI / 2);
+    r0 = c0.add(L.point(dx, dy));
+    r1 = c0.add(L.point(-dx, -dy));
+    r2 = c1.add(L.point(-dx, -dy));
+    r3 = c1.add(L.point(dx, dy));
+    this.points = [this.map.containerPointToLatLng(r0), this.map.containerPointToLatLng(r1), this.map.containerPointToLatLng(r2), this.map.containerPointToLatLng(r3)];
+    this._rect.setLatLngs(this.points);
+    if (!this._featureGroup.hasLayer(this._rect)) {
+      this._featureGroup.addLayer(this._rect);
+    }
+    return this._rect;
+  };
+
+  CrossSection.prototype._direction = function(p0, p1) {
+    return Math.atan2(p1.y - p0.y, p1.x - p0.x);
+  };
+
+  CrossSection.prototype._midPoint = function(p0, p1) {
+    var dx, dy;
+    dx = p1.lng - p0.lng;
+    dy = p1.lat - p0.lat;
+    return L.latLng(p0.lat + (dy / 2), p0.lng + (dx / 2));
+  };
+
+  CrossSection.prototype._createEditControls = function() {
+    var centerControl, leftControl, resizeControl, rightControl;
+    leftControl = this._createEditMarker(this._line.getLatLngs()[0], (function(_this) {
+      return function(e) {
+        _this._updateLine(e.target.getLatLng(), _this._line.getLatLngs()[1]);
+        _this._updateRect(e.target.getLatLng(), _this._line.getLatLngs()[1]);
+        centerControl.updateLocation(_this._rect.getBounds().getCenter());
+        return resizeControl.updateLocation(_this._midPoint(_this._rect.getLatLngs()[0], _this._rect.getLatLngs()[3]));
+      };
+    })(this));
+    rightControl = this._createEditMarker(this._line.getLatLngs()[1], (function(_this) {
+      return function(e) {
+        _this._updateLine(_this._line.getLatLngs()[0], e.target.getLatLng());
+        _this._updateRect(_this._line.getLatLngs()[0], e.target.getLatLng());
+        centerControl.updateLocation(_this._rect.getBounds().getCenter());
+        return resizeControl.updateLocation(_this._midPoint(_this._rect.getLatLngs()[0], _this._rect.getLatLngs()[3]));
+      };
+    })(this));
+    centerControl = this._createEditMarker(this._midPoint.apply(this, this._line.getLatLngs()), (function(_this) {
+      return function(e) {
+        var dx, dy, newLatLng, p0, p1, p3, ref;
+        newLatLng = e.target.getLatLng();
+        dx = newLatLng.lng - centerControl._origLatLng.lng;
+        dy = newLatLng.lat - centerControl._origLatLng.lat;
+        ref = _this._line.getLatLngs(), p0 = ref[0], p1 = ref[1];
+        p0.lat += dy;
+        p0.lng += dx;
+        p1.lat += dy;
+        p1.lng += dx;
+        _this._updateLine(p0, p1);
+        _this._updateRect(p0, p1);
+        leftControl.updateLocation(p0);
+        rightControl.updateLocation(p1);
+        p3 = resizeControl.getLatLng();
+        p3.lat += dy;
+        p3.lng += dx;
+        resizeControl.setLatLng(p3);
+        return centerControl._origLatLng = newLatLng;
+      };
+    })(this));
+    return resizeControl = this._createEditMarker(this._midPoint(this._rect.getLatLngs()[0], this._rect.getLatLngs()[3]), (function(_this) {
+      return function(e) {
+        var centerLoc, denom, myLoc, numer, p1, p2, ref;
+        myLoc = e.target.getLatLng();
+        centerLoc = centerControl.getLatLng();
+        ref = _this._line.getLatLngs(), p1 = ref[0], p2 = ref[1];
+        numer = Math.abs((p2.lat - p1.lat) * myLoc.lng - (p2.lng - p1.lng) * myLoc.lat + p2.lng * p1.lat - p2.lat * p1.lng);
+        denom = Math.sqrt(Math.pow(p2.lng - p1.lng, 2) + Math.pow(p2.lat - p1.lat, 2));
+        _this.width = numer / denom;
+        console.log("new width: ", _this.width, e.target.getLatLng(), centerControl.getLatLng());
+        _this._updateLine.apply(_this, _this._line.getLatLngs());
+        return _this._updateRect.apply(_this, _this._line.getLatLngs());
+      };
+    })(this));
+  };
+
+  CrossSection.prototype._createEditMarker = function(latlng, onDrag) {
+    var editMarker;
+    editMarker = new L.Marker(latlng, {
+      draggable: true,
+      icon: new L.DivIcon({
+        iconSize: new L.Point(8, 8),
+        className: 'leaflet-div-icon leaflet-editing-icon'
+      })
+    });
+    editMarker._origLatLng = latlng;
+    editMarker.updateLocation = function(latLng) {
+      this._origLatLng = latLng;
+      return this.setLatLng(latLng);
+    };
+    editMarker.on('drag', onDrag);
+    editMarker.on('dragend', onDrag);
+    this._editMarkerGroup.addLayer(editMarker);
+    return editMarker;
+  };
+
+  return CrossSection;
+
+})();
+
+module.exports = CrossSection;
+
+
+}});
+
+require.define({"2D/thisfolderisacomment/magnitude-search": function(exports, require, module) {
   var MagnitudeSearch;
 
 MagnitudeSearch = (function() {
@@ -1172,12 +2649,12 @@ MagnitudeSearch = (function() {
     return new Promise((function(_this) {
       return function(resolve, reject) {
         return $.get('count.txt', function(data) {
-          var arr, i, j, _i, _j, _ref;
+          var arr, i, j, k, l, ref;
           arr = data.split(',');
           _this.magarray = [];
-          for (i = _i = 99; _i >= 0; i = --_i) {
+          for (i = k = 99; k >= 0; i = --k) {
             magarray[i] = [];
-            for (j = _j = 0, _ref = arr.length / 102; _j < _ref; j = _j += 1) {
+            for (j = l = 0, ref = arr.length / 102; l < ref; j = l += 1) {
               if (_this.magarray[i][j] != null) {
                 magarray[i][j] = parseInt(arr[(j * 102) + 2 + i]) + magarray[i][j];
               } else {
@@ -1227,9 +2704,9 @@ MagnitudeSearch = (function() {
       return;
     }
     if (click === 0) {
-      return window.open("?mag=" + this._binarySearch(0, 100) + "&startdate=" + (this.d1.year + 1960) + "-" + (this.d1.month + 1) + "-1" + "&enddate=" + (this.d2.year + 1960) + "-" + (this.d2.month + 1) + "-1", "_self");
+      return window.open("?mag=" + (this._binarySearch(0, 100)) + "&startdate=" + (this.d1.year + 1960) + "-" + (this.d1.month + 1) + "-1&enddate=" + (this.d2.year + 1960) + "-" + (this.d2.month + 1) + "-1", "_self");
     } else {
-      return $("#magnitude-search").html("<p>Calculated magnitude cutoff : </p><p style='color:green'>" + this._binarySearch(0, 100) + "</p>");
+      return $("#magnitude-search").html("<p>Calculated magnitude cutoff : </p><p style='color:green'>" + (this._binarySearch(0, 100)) + "</p>");
     }
   };
 
@@ -1261,12 +2738,14 @@ module.exports = new MagnitudeSearch();
 
 }});
 
-require.define({"2D/map-controller": function(exports, require, module) {
+require.define({"2D/thisfolderisacomment/map-controller": function(exports, require, module) {
   var DataLoader, MapController;
 
 DataLoader = require('common/data-loader');
 
 MapController = (function() {
+  MapController.EARTHQUAKE_NUM_LIMIT = 500;
+
   function MapController(map) {
     this.map = map;
     this.map.controller = this;
@@ -1287,7 +2766,7 @@ MapController = (function() {
 
   MapController.prototype.timeLine = null;
 
-  MapController.prototype.speed = 6;
+  MapController.prototype.speed = 360;
 
   MapController.prototype.snd = new Audio("tap.wav");
 
@@ -1310,13 +2789,8 @@ MapController = (function() {
   };
 
   MapController.prototype._getCurrentLimit = function(zoom, tileSize) {
-    var bottom, bounds, height, left, numTiles, nw, nwPixel, nwTile, right, se, sePixel, seTile, top, width;
-    numTiles = Math.pow(2, zoom);
-    if (zoom === 0) {
-      return 20000;
-    } else if (zoom <= 3) {
-      return Math.floor(20000 / Math.pow(numTiles, 2));
-    }
+    var bottom, bounds, height, left, nw, nwPixel, nwTile, right, se, sePixel, seTile, top, width;
+    return MapController.EARTHQUAKE_NUM_LIMIT;
     bounds = this.map.leafletMap.getBounds();
     nw = bounds.getNorthWest();
     se = bounds.getSouthEast();
@@ -1393,9 +2867,9 @@ MapController = (function() {
       tileSize = 256;
       zoom = 0;
     }
-    url = '&limit=' + this._getCurrentLimit(zoom, tileSize) + '&jsonerror=true' + '&minmagnitude=' + this._getCurrentMag(zoom) + '&starttime=' + this.map.parameters.startdate + '&endtime=' + this.map.parameters.enddate;
+    url = "&limit=" + (this._getCurrentLimit(zoom, tileSize)) + "&jsonerror=true&minmagnitude=" + (this._getCurrentMag(zoom)) + "&starttime=" + this.map.parameters.startdate + "&endtime=" + this.map.parameters.enddate;
     if ((nw != null) && (se != null)) {
-      url += '&minlatitude=' + se.lat + '&maxlatitude=' + nw.lat + '&minlongitude=' + nw.lng + '&maxlongitude=' + se.lng;
+      url += "&minlatitude=" + se.lat + "&maxlatitude=" + nw.lat + "&minlongitude=" + nw.lng + "&maxlongitude=" + se.lng;
     }
     return url;
   };
@@ -1431,7 +2905,7 @@ MapController = (function() {
             fillColor: "#" + _this.rainbow.colourAt(depth)
           });
           if (feature.properties != null) {
-            layer.bindPopup("Place: <b>" + feature.properties.place + "</b></br>Magnitude : <b>" + feature.properties.mag + "</b></br>Time : " + _this.util.timeConverter(feature.properties.time) + "</br>Depth : " + depth + " km");
+            layer.bindPopup("Place: <b>" + feature.properties.place + "</b></br>Magnitude: <b> " + feature.properties.mag + "</b></br>Time: " + (_this.util.timeConverter(feature.properties.time)) + "</br>Depth: " + depth + " km");
           }
           if (!(layer instanceof L.Point)) {
             layer.on('mouseover', function() {
@@ -1498,12 +2972,12 @@ MapController = (function() {
   };
 
   MapController.prototype.reloadData = function() {
-    var circle, _i, _len, _ref;
+    var circle, j, len, ref;
     if (this.map.parameters.timeline) {
       this.timeLine.pause();
-      _ref = this.map.earthquakes.circles;
-      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-        circle = _ref[_i];
+      ref = this.map.earthquakes.circles;
+      for (j = 0, len = ref.length; j < len; j++) {
+        circle = ref[j];
         if (this.map.leafletMap.hasLayer(circle)) {
           this.map.leafletMap.removeLayer(circle);
         }
@@ -1530,17 +3004,17 @@ MapController = (function() {
         callback: this.map.parameters.datap_callback
       });
     } else {
-      promise = loader.load('http://earthquake.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson' + this._geojsonURL(), {
+      promise = loader.load("http://earthquake.usgs.gov/fdsnws/event/1/query?eventtype=earthquake&orderby=time-asc&format=geojson" + (this._geojsonURL()), {
         ajax: true
       });
     }
     return promise.then((function(_this) {
       return function(results) {
-        var delay, feature, i, _i, _len, _ref;
+        var delay, feature, i, j, len, ref;
         _this.map.values.size = results.features.length;
-        _ref = results.features;
-        for (i = _i = 0, _len = _ref.length; _i < _len; i = ++_i) {
-          feature = _ref[i];
+        ref = results.features;
+        for (i = j = 0, len = ref.length; j < len; i = ++j) {
+          feature = ref[i];
           _this.map.earthquakes.circles[i] = L.geoJson(feature, _this._markerCreator());
           _this.map.earthquakes.time[i] = feature.properties.time;
           _this.map.earthquakes.depth[i] = feature.geometry.coordinates[2];
@@ -1552,7 +3026,6 @@ MapController = (function() {
         if (_this.map.values.size > 0) {
           _this.map.values.timediff = results.features[_this.map.values.size - 1].properties.time - results.features[0].properties.time;
           _this.map.parameters.starttime = results.features[0].properties.time;
-          $('#slider-wrapper').html("<input id='slider' name='slider' type='range' min='0' max='" + _this.map.values.timediff + "' value='0' step='1' style='display: none;' data-theme='a' data-track-theme='a'>");
           $("#slider").slider({
             slidestart: function(event) {
               return _this.timeLine.pause();
@@ -1562,10 +3035,10 @@ MapController = (function() {
               return _this.timeLine.progress($("#slider").val() / _this.map.values.timediff);
             }
           });
-          $("#info").html("<p>total earthquakes : " + _this.map.values.size + "<br/>minimum depth : " + Math.min.apply(null, _this.map.earthquakes.depth) + " km" + "</br>maximum depth : " + Math.max.apply(null, _this.map.earthquakes.depth) + " km</p>" + "<div class='ui-body ui-body-a'><p><a href='http://github.com/gizmoabhinav/Seismic-Eruptions'>Link to the project</a></p></div>");
-          $("#startdate").html("Start date : " + _this.util.timeConverter(_this.map.parameters.startdate));
-          $("#enddate").html("End date : " + _this.util.timeConverter(_this.map.parameters.enddate));
-          $("#magcutoff").html("Cutoff magnitude : " + _this.map.parameters.mag);
+          $("#info").html("<p>\ntotal earthquakes: " + _this.map.values.size + "<br/>\nminimum depth: " + (Math.min.apply(null, _this.map.earthquakes.depth)) + " km</br>\nmaximum depth: " + (Math.max.apply(null, _this.map.earthquakes.depth)) + " km\n</p>\n<div class='ui-body ui-body-a'><p>\n  <a href='http://github.com/gizmoabhinav/Seismic-Eruptions'>Link to the project</a>\n</p></div>");
+          $("#startdate").html("Start date: " + (_this.util.timeConverter(_this.map.parameters.startdate)));
+          $("#enddate").html("End date: " + (_this.util.timeConverter(_this.map.parameters.enddate)));
+          $("#magcutoff").html("Cutoff magnitude: " + _this.map.parameters.mag);
           return _this.timeLine.resume();
         }
       };
@@ -1581,7 +3054,7 @@ module.exports = MapController;
 
 }});
 
-require.define({"2D/map": function(exports, require, module) {
+require.define({"2D/thisfolderisacomment/map": function(exports, require, module) {
   var CrossSection, Map, util;
 
 CrossSection = require('2D/cross-section');
@@ -1592,18 +3065,18 @@ Map = (function() {
   var p;
 
   function Map() {
-    var d, _base, _base1;
+    var base, base1, d;
     d = new Date();
     if (this.parameters.startdate == null) {
-      this.parameters.startdate = "1900/1/1";
+      this.parameters.startdate = "1960/1/1";
     }
     if (this.parameters.enddate == null) {
-      this.parameters.enddate = d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+      this.parameters.enddate = (d.getFullYear()) + "/" + (d.getMonth() + 1) + "/" + (d.getDate());
     }
-    this.parameters.timeline = (this.parameters.timeline != null) || false;
+    this.parameters.timeline = true;
     if (!((this.parameters.center != null) && this.parameters.zoom)) {
-      (_base = this.parameters).nw || (_base.nw = L.latLng(50, -40));
-      (_base1 = this.parameters).se || (_base1.se = L.latLng(-20, 40));
+      (base = this.parameters).nw || (base.nw = L.latLng(50, -40));
+      (base1 = this.parameters).se || (base1.se = L.latLng(-20, 40));
     }
   }
 
@@ -1621,7 +3094,6 @@ Map = (function() {
     se: (p = util.getURLParameter('se')) ? L.latLng.apply(L, p.split(',')) : null,
     center: (p = util.getURLParameter('center')) ? L.latLng.apply(L, p.split(',')) : null,
     zoom: util.getURLParameter("zoom"),
-    timeline: util.getURLParameter('timeline'),
     data: util.getURLParameter('data'),
     datap: util.getURLParameter('datap'),
     datap_callback: util.getURLParameter('datap_callback')
@@ -1734,9 +3206,9 @@ require.define({"common/data-loader": function(exports, require, module) {
 DataLoader = (function() {
   function DataLoader() {}
 
-  DataLoader.prototype.load = function(url, _arg) {
-    var ajax, callback, _ref;
-    _ref = _arg != null ? _arg : {}, ajax = _ref.ajax, callback = _ref.callback;
+  DataLoader.prototype.load = function(url, arg) {
+    var ajax, callback, ref;
+    ref = arg != null ? arg : {}, ajax = ref.ajax, callback = ref.callback;
     return new Promise((function(_this) {
       return function(resolve, reject) {
         var id, scriptDomElement;
@@ -1791,7 +3263,7 @@ module.exports = DataLoader;
 
 require.define({"common/util": function(exports, require, module) {
   var Util,
-  __hasProp = {}.hasOwnProperty;
+  hasProp = {}.hasOwnProperty;
 
 Util = (function() {
   function Util() {}
@@ -1850,7 +3322,7 @@ Util = (function() {
     center = map.leafletMap.getCenter();
     params = {
       zoom: map.leafletMap.getZoom(),
-      center: "" + center.lat + "," + center.lng,
+      center: center.lat + "," + center.lng,
       mag: map.parameters.desiredMag,
       startdate: map.parameters.startdate,
       enddate: map.parameters.enddate
@@ -1859,7 +3331,7 @@ Util = (function() {
       params.timeline = true;
     }
     for (key in overrides) {
-      if (!__hasProp.call(overrides, key)) continue;
+      if (!hasProp.call(overrides, key)) continue;
       value = overrides[key];
       params[key] = value;
     }
