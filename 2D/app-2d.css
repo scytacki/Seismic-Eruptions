@@ -177,4 +177,54 @@ p {
   top: 25px;
   left: 25px;
 }
+@-webkit-keyframes fantastic-entrance {
+  0% {
+    fill: #fff;
+    transform: scale(0);
+  }
+  20% {
+    transform: scale(1);
+  }
+}
+#map .leaflet-overlay-pane > svg path[fill-opacity="0.8"] {
+  transform-origin: center;
+  -moz-transform-origin: center;
+  animation: fantastic-entrance 1000ms;
+}
+@-moz-keyframes fantastic-entrance {
+  0% {
+    fill: #fff;
+    transform: scale(0);
+  }
+  20% {
+    transform: scale(1);
+  }
+}
+@-webkit-keyframes fantastic-entrance {
+  0% {
+    fill: #fff;
+    transform: scale(0);
+  }
+  20% {
+    transform: scale(1);
+  }
+}
+@-o-keyframes fantastic-entrance {
+  0% {
+    fill: #fff;
+    transform: scale(0);
+  }
+  20% {
+    transform: scale(1);
+  }
+}
+@keyframes fantastic-entrance {
+  0% {
+    fill: #fff;
+    transform: scale(0);
+  }
+  20% {
+    transform: scale(1);
+  }
+}
 

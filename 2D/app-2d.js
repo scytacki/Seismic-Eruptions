@@ -116,7 +116,7 @@ A class to swap out different base maps
 Note: There's supposed to be a controller and provider that feeds into here, but NOTE: I've
 skipped them both for rapid prototyping.
  */
-var BaseMapLayerManager, BaseMapSelectorUI, MapView, NNode,
+var BaseMapLayerManager, BaseMapSelectorUI, MapView, NNode, SessionController,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -125,6 +125,8 @@ NNode = require("./NNode");
 BaseMapSelectorUI = require("./BaseMapSelectorUI");
 
 MapView = require("./MapView");
+
+SessionController = require("./SessionController");
 
 module.exports = new (BaseMapLayerManager = (function(superClass) {
   extend(BaseMapLayerManager, superClass);
@@ -136,26 +138,55 @@ module.exports = new (BaseMapLayerManager = (function(superClass) {
       subdomains: ['otile1', 'otile2', 'otile3', 'otile4']
     });
     this.earthquakeDensityMap = L.tileLayer('http://{s}.tiles.mapbox.com/v3/bclc-apec.map-rslgvy56/{z}/{x}/{y}.png', {});
-    this.previouslyDisplaying = this.satelliteMap;
+    this.sessionController = SessionController;
+    this.baseLayer = "satellite";
+    this.previousBaseLayer = null;
     this.mapView = MapView;
     this.baseMapSelector = BaseMapSelectorUI;
-    this.mapView.tell("add-layer", this.satelliteMap);
     this.baseMapSelector.subscribe("update", (function(_this) {
       return function(value) {
-        _this.mapView.tell("remove-layer", _this.previouslyDisplaying);
-        return _this.mapView.tell("add-layer", _this.previouslyDisplaying = (function() {
-          switch (value) {
-            case "street":
-              return this.streetMap;
-            case "satellite":
-              return this.satelliteMap;
-            case "density":
-              return this.earthquakeDensityMap;
-          }
-        }).call(_this));
+        _this.baseLayer = value;
+        _this.updateBaseLayer();
+        return _this.updateSession();
       };
     })(this));
+    this.sessionController.subscribe("update", (function(_this) {
+      return function(session) {
+        _this.baseLayer = session.baseLayer;
+        return _this.updateBaseLayer();
+      };
+    })(this));
+    this.updateBaseLayer();
+    this.updateSession();
   }
+
+  BaseMapLayerManager.prototype.updateSession = function() {
+    return this.sessionController.tell("append", {
+      baseLayer: this.baseLayer
+    });
+  };
+
+  BaseMapLayerManager.prototype.updateBaseLayer = function() {
+    this.baseMapSelector.tell("set", this.baseLayer);
+    if (this.previousBaseLayer !== this.baseLayer) {
+      if (this.previousBaseLayer != null) {
+        this.mapView.tell("remove-layer", this.getLayer(this.previousBaseLayer));
+      }
+      this.mapView.tell("add-layer", this.getLayer(this.baseLayer));
+      return this.previousBaseLayer = this.baseLayer;
+    }
+  };
+
+  BaseMapLayerManager.prototype.getLayer = function(name) {
+    switch (name) {
+      case "street":
+        return this.streetMap;
+      case "satellite":
+        return this.satelliteMap;
+      case "density":
+        return this.earthquakeDensityMap;
+    }
+  };
 
   return BaseMapLayerManager;
 
@@ -213,7 +244,7 @@ A class to add or remove the boundaries layer
 Note: There's supposed to be a controller and provider that feeds into here, but NOTE: I've
 skipped them both for rapid prototyping.
  */
-var BoundariesLayerManager, BoundariesToggleUI, MapView, NNode,
+var BoundariesLayerManager, BoundariesToggleUI, MapView, NNode, SessionController,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -223,6 +254,8 @@ BoundariesToggleUI = require("./BoundariesToggleUI");
 
 MapView = require("./MapView");
 
+SessionController = require("./SessionController");
+
 module.exports = new (BoundariesLayerManager = (function(superClass) {
   extend(BoundariesLayerManager, superClass);
 
@@ -231,24 +264,46 @@ module.exports = new (BoundariesLayerManager = (function(superClass) {
     this.boundariesLayer = new L.KML("plates.kml", {
       async: true
     });
-    this.previouslyDisplaying = false;
+    this.boundariesVisible = false;
+    this.boundariesPreviouslyVisible = false;
+    this.sessionController = SessionController;
     this.mapView = MapView;
     this.boundariesToggle = BoundariesToggleUI;
     this.boundariesToggle.subscribe("update", (function(_this) {
       return function(value) {
-        if (value) {
-          if (!_this.previouslyDisplaying) {
-            _this.mapView.tell("add-layer", _this.boundariesLayer);
-          }
-        } else {
-          if (_this.previouslyDisplaying) {
-            _this.mapView.tell("remove-layer", _this.boundariesLayer);
-          }
-        }
-        return _this.previouslyDisplaying = value;
+        _this.boundariesVisible = value;
+        _this.updateBoundaries();
+        return _this.updateSession();
       };
     })(this));
+    this.sessionController.subscribe("update", (function(_this) {
+      return function(session) {
+        _this.boundariesVisible = session.boundariesVisible;
+        return _this.updateBoundaries();
+      };
+    })(this));
+    this.updateSession();
   }
+
+  BoundariesLayerManager.prototype.updateSession = function() {
+    return this.sessionController.tell("append", {
+      boundariesVisible: this.boundariesVisible
+    });
+  };
+
+  BoundariesLayerManager.prototype.updateBoundaries = function() {
+    this.boundariesToggle.tell("set", this.boundariesVisible);
+    if (this.boundariesVisible) {
+      if (!this.boundariesPreviouslyVisible) {
+        this.mapView.tell("add-layer", this.boundariesLayer);
+      }
+    } else {
+      if (this.boundariesPreviouslyVisible) {
+        this.mapView.tell("remove-layer", this.boundariesLayer);
+      }
+    }
+    return this.boundariesPreviouslyVisible = this.boundariesVisible;
+  };
 
   return BoundariesLayerManager;
 
@@ -343,7 +398,7 @@ require.define({"2D/ControlsManager": function(exports, require, module) {
 /*
 Manages the showing/hiding of the bottom bar
  */
-var App, ControlsUI, NNode,
+var App, ControlsUI, NNode, SessionController,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -351,28 +406,49 @@ NNode = require("./NNode");
 
 ControlsUI = require("./ControlsUI");
 
+SessionController = require("./SessionController");
+
 module.exports = new (App = (function(superClass) {
   extend(App, superClass);
 
   function App() {
     App.__super__.constructor.apply(this, arguments);
     this.controlsUI = ControlsUI;
+    this.sessionController = SessionController;
     this.controlsVisible = true;
     this.controls = $("#controls");
     this.showControls = $("#show-controls");
     this.controlsUI.subscribe("update", (function(_this) {
       return function() {
         _this.controlsVisible = !_this.controlsVisible;
-        if (_this.controlsVisible) {
-          _this.controls.finish().slideDown(300);
-          return _this.showControls.finish().fadeOut(300);
-        } else {
-          _this.controls.finish().slideUp(300);
-          return _this.showControls.finish().fadeIn(300);
-        }
+        _this.updateControlVisibility();
+        return _this.updateSession();
       };
     })(this));
+    this.sessionController.subscribe("update", (function(_this) {
+      return function(session) {
+        _this.controlsVisible = session.controlsVisible;
+        return _this.updateControlVisibility();
+      };
+    })(this));
+    this.updateSession();
   }
+
+  App.prototype.updateSession = function() {
+    return this.sessionController.tell("append", {
+      controlsVisible: this.controlsVisible
+    });
+  };
+
+  App.prototype.updateControlVisibility = function() {
+    if (this.controlsVisible) {
+      this.controls.finish().slideDown(300);
+      return this.showControls.finish().fadeOut(300);
+    } else {
+      this.controls.finish().slideUp(300);
+      return this.showControls.finish().fadeIn(300);
+    }
+  };
 
   return App;
 
@@ -604,7 +680,7 @@ require.define({"2D/DateFilterController": function(exports, require, module) {
 A class to manage the date filter, connecting the data filter to the
  * UI date range slider, playback slider, and the animation of date range
  */
-var DataFormatter, DateFilterController, DateRangeSliderUI, NNode, PlaybackController, Utils,
+var DataFormatter, DateFilterController, DateRangeSliderUI, NNode, PlaybackController, SessionController,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -616,7 +692,7 @@ DateRangeSliderUI = require("./DateRangeSliderUI");
 
 DataFormatter = require("./DataFormatter");
 
-Utils = require("./Utils");
+SessionController = require("./SessionController");
 
 module.exports = new (DateFilterController = (function(superClass) {
   extend(DateFilterController, superClass);
@@ -630,12 +706,15 @@ module.exports = new (DateFilterController = (function(superClass) {
     this.startDate = new Date(1960, 0).valueOf();
     this.endDate = DateFilterController.MAX_DATE;
     this.animatedEndDate = DateFilterController.MAX_DATE;
+    this.sessionController = SessionController;
     this.playbackController = PlaybackController;
     this.playbackController.subscribe("update", (function(_this) {
       return function(progress) {
         _this.animatedEndDate = progress * (_this.endDate - _this.startDate) + _this.startDate;
+        _this.limitDatesJustInCase();
         _this.postControllerChanges();
-        return _this.updatePlaybackSliderTextOnly();
+        _this.updatePlaybackSliderTextOnly();
+        return _this.updateSession();
       };
     })(this));
     this.dateRangeSlider = DateRangeSliderUI;
@@ -652,7 +731,8 @@ module.exports = new (DateFilterController = (function(superClass) {
         _this.limitDatesJustInCase();
         _this.postControllerChanges();
         _this.updateDateRange();
-        return _this.updatePlaybackSlider();
+        _this.updatePlaybackSlider();
+        return _this.updateSession();
       };
     })(this));
     this.dateRangeSlider.subscribe("update-end", (function(_this) {
@@ -661,17 +741,36 @@ module.exports = new (DateFilterController = (function(superClass) {
         _this.limitDatesJustInCase();
         _this.postControllerChanges();
         _this.updateDateRange();
+        _this.updatePlaybackSlider();
+        return _this.updateSession();
+      };
+    })(this));
+    this.listen("request-update", this.postControllerChanges);
+    this.sessionController.subscribe("update", (function(_this) {
+      return function(session) {
+        _this.startDate = session.startDate, _this.animatedEndDate = session.animatedEndDate, _this.endDate = session.endDate;
+        _this.limitDatesJustInCase();
+        _this.postControllerChanges();
+        _this.updateDateRange();
         return _this.updatePlaybackSlider();
       };
     })(this));
     this.updatePlaybackSlider();
     this.updateDateRange();
-    this.listen("request-update", this.postControllerChanges);
+    this.updateSession();
   }
+
+  DateFilterController.prototype.updateSession = function() {
+    return this.sessionController.tell("append", {
+      startDate: this.startDate,
+      animatedEndDate: this.animatedEndDate,
+      endDate: this.endDate
+    });
+  };
 
   DateFilterController.prototype.limitDatesJustInCase = function() {
     this.endDate = Math.min(this.endDate, DateFilterController.MAX_DATE);
-    return this.animatedEndDate = Math.min(Math.max(this.animatedEndDate, this.startDate), this.endDate);
+    return this.animatedEndDate = Math.round(Math.min(Math.max(this.animatedEndDate, this.startDate), this.endDate));
   };
 
   DateFilterController.prototype.postControllerChanges = function() {
@@ -865,6 +964,70 @@ module.exports = new (EarthquakeLayerManager = (function(superClass) {
 
 }});
 
+require.define({"2D/HashController": function(exports, require, module) {
+  
+/*
+A class to watch for hash changes and update the map accordingly
+NOTE: Probably decouple the share link going forward,
+as well as find a better way to load in hashes...
+ */
+var HashController, NNode, SessionController,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+SessionController = require("./SessionController");
+
+module.exports = new (HashController = (function(superClass) {
+  extend(HashController, superClass);
+
+  function HashController() {
+    HashController.__super__.constructor.apply(this, arguments);
+    this.sessionController = SessionController;
+    this.delayedTimer = null;
+    this.lastUpdate = null;
+    this.sessionController.subscribe("append", (function(_this) {
+      return function(session) {
+        if (_this.delayedTimer != null) {
+          clearTimeout(_this.delayedTimer);
+          _this.delayedTimer = null;
+        }
+        if ((_this.lastUpdate != null) && Date.now() - _this.lastUpdate < 1500) {
+          return _this.delayedTimer = setTimeout(function() {
+            return _this.updateLink(session);
+          }, 300);
+        } else {
+          return _this.updateLink(session);
+        }
+      };
+    })(this));
+    $(window).on("load", (function(_this) {
+      return function() {
+        var error;
+        try {
+          _this.sessionController.tell("replace-and-update", JSON.parse(window.decodeURIComponent(window.location.hash.slice(1))));
+        } catch (_error) {
+          error = _error;
+        }
+        return _this.sessionController.tell("append", {});
+      };
+    })(this));
+  }
+
+  HashController.prototype.updateLink = function(session) {
+    window.location.hash = "#" + (window.encodeURIComponent(JSON.stringify(session)));
+    $("#share-link").val("" + window.location);
+    return this.lastUpdate = Date.now();
+  };
+
+  return HashController;
+
+})(NNode));
+
+
+}});
+
 require.define({"2D/MagnitudeFilter": function(exports, require, module) {
   
 /*
@@ -873,7 +1036,7 @@ than a specified magnitude
 
 See DateFilter's header comment for more info on filters.
  */
-var CacheFilter, DateFilter, MagnitudeFilterController, NNode,
+var CacheFilter, MagnitudeFilterController, MagnitudeFilterFilter, NNode,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -883,11 +1046,11 @@ CacheFilter = require("./CacheFilter");
 
 MagnitudeFilterController = require("./MagnitudeFilterController");
 
-module.exports = new (DateFilter = (function(superClass) {
-  extend(DateFilter, superClass);
+module.exports = new (MagnitudeFilterFilter = (function(superClass) {
+  extend(MagnitudeFilterFilter, superClass);
 
-  function DateFilter() {
-    DateFilter.__super__.constructor.apply(this, arguments);
+  function MagnitudeFilterFilter() {
+    MagnitudeFilterFilter.__super__.constructor.apply(this, arguments);
     this.controller = MagnitudeFilterController;
     this.minMagnitude = -Infinity;
     this.maxMagnitude = Infinity;
@@ -936,7 +1099,7 @@ module.exports = new (DateFilter = (function(superClass) {
   Note: minMagnitude is inclusive, maxMagnitude is exclusive
    */
 
-  DateFilter.prototype.filterMagnitudes = function(data, minMagnitude, maxMagnitude, newArray) {
+  MagnitudeFilterFilter.prototype.filterMagnitudes = function(data, minMagnitude, maxMagnitude, newArray) {
     var i, len, point, ref;
     if (newArray == null) {
       newArray = [];
@@ -950,7 +1113,7 @@ module.exports = new (DateFilter = (function(superClass) {
     return newArray;
   };
 
-  return DateFilter;
+  return MagnitudeFilterFilter;
 
 })(NNode));
 
@@ -963,7 +1126,7 @@ require.define({"2D/MagnitudeFilterController": function(exports, require, modul
 A class to manage the magnitude filter, tying together the UI
 and the data filter
  */
-var DataFormatter, MagnitudeFilterController, MagnitudeSliderUI, NNode,
+var DataFormatter, MagnitudeFilterController, MagnitudeSliderUI, NNode, SessionController,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -972,6 +1135,8 @@ NNode = require("./NNode");
 MagnitudeSliderUI = require("./MagnitudeSliderUI");
 
 DataFormatter = require("./DataFormatter");
+
+SessionController = require("./SessionController");
 
 module.exports = new (MagnitudeFilterController = (function(superClass) {
   extend(MagnitudeFilterController, superClass);
@@ -983,12 +1148,14 @@ module.exports = new (MagnitudeFilterController = (function(superClass) {
   function MagnitudeFilterController() {
     MagnitudeFilterController.__super__.constructor.apply(this, arguments);
     this.minMagnitude = 5;
+    this.sessionController = SessionController;
     this.uiMagnitudeSlider = MagnitudeSliderUI;
     this.uiMagnitudeSlider.subscribe("update", (function(_this) {
       return function(value) {
         _this.minMagnitude = value;
         _this.postControllerChanges();
-        return _this.updateMagnitudeSlider();
+        _this.updateMagnitudeSlider();
+        return _this.updateSession();
       };
     })(this));
     this.uiMagnitudeSlider.tell("configure", {
@@ -997,9 +1164,23 @@ module.exports = new (MagnitudeFilterController = (function(superClass) {
       magnitudeStep: 0.1,
       initialMinMagnitude: this.minMagnitude
     });
+    this.sessionController.subscribe("update", (function(_this) {
+      return function(session) {
+        _this.minMagnitude = session.minMagnitude;
+        _this.postControllerChanges();
+        return _this.updateMagnitudeSlider();
+      };
+    })(this));
     this.updateMagnitudeSlider();
+    this.updateSession();
     this.listen("request-update", this.postControllerChanges);
   }
+
+  MagnitudeFilterController.prototype.updateSession = function() {
+    return this.sessionController.tell("append", {
+      minMagnitude: this.minMagnitude
+    });
+  };
 
   MagnitudeFilterController.prototype.postControllerChanges = function() {
     return this.post("update", {
@@ -1077,7 +1258,7 @@ require.define({"2D/MapKeyController": function(exports, require, module) {
 An all-in-one class to manage the map key, populating it as well as showing/hiding it.
 Could perhaps be split into multiple classes
  */
-var DataFormatter, MapKeyController, MapKeyToggleUI, NNode,
+var DataFormatter, MapKeyController, MapKeyToggleUI, NNode, SessionController,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -1087,11 +1268,14 @@ DataFormatter = require("./DataFormatter");
 
 MapKeyToggleUI = require("./MapKeyToggleUI");
 
+SessionController = require("./SessionController");
+
 module.exports = new (MapKeyController = (function(superClass) {
   extend(MapKeyController, superClass);
 
   function MapKeyController() {
     var depth, magnitude, radius;
+    MapKeyController.__super__.constructor.apply(this, arguments);
     this.mapKey = $("#map-key");
     this.mapKey.find(".magnitude-key").html(((function() {
       var i, results;
@@ -1110,20 +1294,39 @@ module.exports = new (MapKeyController = (function(superClass) {
       }
       return results;
     })()).join(""));
+    this.sessionController = SessionController;
+    this.sessionController.subscribe("update", (function(_this) {
+      return function(session) {
+        _this.keyVisible = session.keyVisible;
+        return _this.updateKeyVisibility();
+      };
+    })(this));
     this.mapKeyToggle = MapKeyToggleUI;
     this.keyVisible = false;
-    this.mapKey.hide();
     this.mapKeyToggle.subscribe("update", (function(_this) {
       return function(value) {
         _this.keyVisible = value;
-        if (_this.keyVisible) {
-          return _this.mapKey.finish().fadeIn(300);
-        } else {
-          return _this.mapKey.finish().fadeOut(300);
-        }
+        _this.updateKeyVisibility();
+        return _this.updateSession();
       };
     })(this));
+    this.updateSession();
   }
+
+  MapKeyController.prototype.updateSession = function() {
+    return this.sessionController.tell("append", {
+      keyVisible: this.keyVisible
+    });
+  };
+
+  MapKeyController.prototype.updateKeyVisibility = function() {
+    this.mapKeyToggle.tell("set", this.keyVisible);
+    if (this.keyVisible) {
+      return this.mapKey.finish().fadeIn(300);
+    } else {
+      return this.mapKey.finish().fadeOut(300);
+    }
+  };
 
   return MapKeyController;
 
@@ -1195,13 +1398,14 @@ module.exports = new (MapView = (function(superClass) {
 
   function MapView() {
     MapView.__super__.constructor.apply(this, arguments);
-    this.leafletMap = L.map("map", {
-      worldCopyJump: true
-    });
+    this.leafletMap = L.map("map");
     $(window).on("load", (function(_this) {
       return function() {
-        _this.leafletMap.fitBounds(L.latLngBounds(L.latLng(-50, -40), L.latLng(50, 40)));
-        return _this.leafletMap.invalidateSize(true);
+        _this.leafletMap.invalidateSize();
+        _this.post("loaded");
+        return _this.leafletMap.on("moveend", function() {
+          return _this.post("bounds-update", _this.leafletMap.getBounds());
+        });
       };
     })(this));
     this.listen("add-layer", (function(_this) {
@@ -1214,9 +1418,109 @@ module.exports = new (MapView = (function(superClass) {
         return _this.leafletMap.removeLayer(layer);
       };
     })(this));
+    this.listen("freeze", (function(_this) {
+      return function() {
+        _this.leafletMap.options.minZoom = _this.leafletMap.options.maxZoom = _this.leafletMap.getZoom();
+        return _this.leafletMap.setMaxBounds(_this.leafletMap.getBounds());
+      };
+    })(this));
+    this.listen("unfreeze", (function(_this) {
+      return function() {
+        _this.leafletMap.options.minZoom = 0;
+        _this.leafletMap.options.maxZoom = 18;
+        return _this.leafletMap.setMaxBounds(null);
+      };
+    })(this));
+    this.listen("set-bounds", (function(_this) {
+      return function(bounds) {
+        return _this.leafletMap.fitBounds(bounds);
+      };
+    })(this));
   }
 
   return MapView;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/MapViewManager": function(exports, require, module) {
+  
+/*
+Manages the map's movement (pan and zoom)
+ */
+var MapView, MapViewManager, NNode, SessionController,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+MapView = require("./MapView");
+
+SessionController = require("./SessionController");
+
+module.exports = new (MapViewManager = (function(superClass) {
+  extend(MapViewManager, superClass);
+
+  function MapViewManager() {
+    MapViewManager.__super__.constructor.apply(this, arguments);
+    this.sessionController = SessionController;
+    this.minLatitude = -40;
+    this.minLongitude = -50;
+    this.maxLatitude = 40;
+    this.maxLongitude = 50;
+    this.restrictedView = false;
+    this.previouslyRestrictedView = false;
+    this.mapView = MapView;
+    this.mapView.subscribe("loaded", (function(_this) {
+      return function() {
+        return _this.updateMapView();
+      };
+    })(this));
+    this.mapView.subscribe("bounds-update", (function(_this) {
+      return function(bounds) {
+        var max, min;
+        min = bounds.getSouthWest();
+        max = bounds.getNorthEast();
+        _this.minLatitude = min.lat;
+        _this.maxLatitude = max.lat;
+        _this.minLongitude = min.lng;
+        _this.maxLongitude = max.lng;
+        return _this.updateSession();
+      };
+    })(this));
+    this.sessionController.subscribe("update", (function(_this) {
+      return function(session) {
+        _this.minLatitude = session.minLatitude, _this.maxLatitude = session.maxLatitude, _this.minLongitude = session.minLongitude, _this.maxLongitude = session.maxLongitude, _this.restrictedView = session.restrictedView;
+        return _this.updateMapView();
+      };
+    })(this));
+    this.updateSession();
+  }
+
+  MapViewManager.prototype.updateSession = function() {
+    return this.sessionController.tell("append", {
+      minLatitude: this.minLatitude,
+      minLongitude: this.minLongitude,
+      maxLatitude: this.maxLatitude,
+      maxLongitude: this.maxLongitude,
+      restrictedView: this.restrictedView
+    });
+  };
+
+  MapViewManager.prototype.updateMapView = function() {
+    if (this.previouslyRestrictedView) {
+      this.mapView.tell("unfreeze");
+    }
+    this.mapView.tell("set-bounds", L.latLngBounds(L.latLng(this.minLatitude, this.minLongitude), L.latLng(this.maxLatitude, this.maxLongitude)));
+    if (this.restrictedView) {
+      this.mapView.tell("freeze");
+    }
+    return this.previouslyRestrictedView = this.restrictedView;
+  };
+
+  return MapViewManager;
 
 })(NNode));
 
@@ -1555,6 +1859,55 @@ module.exports = new (PlaybackSliderUI = (function(superClass) {
 
 }});
 
+require.define({"2D/SessionController": function(exports, require, module) {
+  
+/*
+A class to manage the user's map session, including settings of most things.
+ */
+var NNode, SessionController,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (SessionController = (function(superClass) {
+  extend(SessionController, superClass);
+
+  function SessionController() {
+    SessionController.__super__.constructor.apply(this, arguments);
+    this.session = {};
+    this.listen("append", (function(_this) {
+      return function(params) {
+        var key, value;
+        for (key in params) {
+          value = params[key];
+          _this.session[key] = value;
+        }
+        return _this.post("append", _this.session);
+      };
+    })(this));
+    this.listen("replace-and-update", (function(_this) {
+      return function(params) {
+        var key;
+        for (key in _this.session) {
+          if (params[key] != null) {
+            if (typeof _this.session[key] === typeof params[key]) {
+              _this.session[key] = params[key];
+            }
+          }
+        }
+        return _this.post("update", _this.session);
+      };
+    })(this));
+  }
+
+  return SessionController;
+
+})(NNode));
+
+
+}});
+
 require.define({"2D/Utils": function(exports, require, module) {
 
   
@@ -1580,7 +1933,9 @@ module.exports = App = (function(superClass) {
         require("./BoundariesLayerManager");
         require("./BaseMapLayerManager");
         require("./ControlsManager");
-        return require("./MapKeyController");
+        require("./MapKeyController");
+        require("./MapViewManager");
+        return require("./HashController");
       };
     })(this));
   }
