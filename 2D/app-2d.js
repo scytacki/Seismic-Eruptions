@@ -432,6 +432,7 @@ module.exports = new (App = (function(superClass) {
       };
     })(this));
     this.updateSession();
+    this.updateControlVisibility();
   }
 
   App.prototype.updateSession = function() {
@@ -728,6 +729,7 @@ module.exports = new (DateFilterController = (function(superClass) {
     this.dateRangeSlider.subscribe("update-start", (function(_this) {
       return function(start) {
         _this.startDate = (new Date(start, 0)).valueOf();
+        _this.animatedEndDate = Infinity;
         _this.limitDatesJustInCase();
         _this.postControllerChanges();
         _this.updateDateRange();
@@ -738,6 +740,7 @@ module.exports = new (DateFilterController = (function(superClass) {
     this.dateRangeSlider.subscribe("update-end", (function(_this) {
       return function(end) {
         _this.endDate = (new Date(end, 11, 31)).valueOf();
+        _this.animatedEndDate = Infinity;
         _this.limitDatesJustInCase();
         _this.postControllerChanges();
         _this.updateDateRange();
