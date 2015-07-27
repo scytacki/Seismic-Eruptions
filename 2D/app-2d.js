@@ -463,17 +463,17 @@ require.define({"2D/ControlsUI": function(exports, require, module) {
 /*
 Represents the two show/hide chevron buttons
  */
-var App, NNode,
+var ControlsUI, NNode,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
 NNode = require("./NNode");
 
-module.exports = new (App = (function(superClass) {
-  extend(App, superClass);
+module.exports = new (ControlsUI = (function(superClass) {
+  extend(ControlsUI, superClass);
 
-  function App() {
-    App.__super__.constructor.apply(this, arguments);
+  function ControlsUI() {
+    ControlsUI.__super__.constructor.apply(this, arguments);
     this.showButton = $("#show-controls");
     this.hideButton = $("#hide-controls");
     this.showButton.add(this.hideButton).click((function(_this) {
@@ -483,7 +483,7 @@ module.exports = new (App = (function(superClass) {
     })(this));
   }
 
-  return App;
+  return ControlsUI;
 
 })(NNode));
 
@@ -729,7 +729,6 @@ module.exports = new (DateFilterController = (function(superClass) {
     this.dateRangeSlider.subscribe("update-start", (function(_this) {
       return function(start) {
         _this.startDate = (new Date(start, 0)).valueOf();
-        _this.animatedEndDate = Infinity;
         _this.limitDatesJustInCase();
         _this.postControllerChanges();
         _this.updateDateRange();
@@ -773,6 +772,7 @@ module.exports = new (DateFilterController = (function(superClass) {
 
   DateFilterController.prototype.limitDatesJustInCase = function() {
     this.endDate = Math.min(this.endDate, DateFilterController.MAX_DATE);
+    this.startDate = Math.max(this.startDate, DateFilterController.MIN_DATE);
     return this.animatedEndDate = Math.round(Math.min(Math.max(this.animatedEndDate, this.startDate), this.endDate));
   };
 
@@ -798,7 +798,11 @@ module.exports = new (DateFilterController = (function(superClass) {
   };
 
   DateFilterController.prototype.updateDateRange = function() {
-    return this.dateRangeSlider.tell("set-text", ((new Date(this.startDate)).getFullYear()) + " and " + ((new Date(this.endDate)).getFullYear()));
+    var endYear, startYear;
+    startYear = (new Date(this.startDate)).getFullYear();
+    endYear = (new Date(this.endDate)).getFullYear();
+    this.dateRangeSlider.tell("set-text", startYear + " and " + endYear);
+    return this.dateRangeSlider.tell("set", startYear, endYear);
   };
 
   return DateFilterController;
@@ -819,28 +823,40 @@ module.exports = new (DateRangeSliderUI = (function(superClass) {
   extend(DateRangeSliderUI, superClass);
 
   function DateRangeSliderUI() {
+    var preventChangeFromHappenningHack;
     DateRangeSliderUI.__super__.constructor.apply(this, arguments);
+    preventChangeFromHappenningHack = false;
     this.dateSliderStart = $("#date-slider-start");
     this.dateSliderEnd = $("#date-slider-end");
     this.dateSliderReadout = $("#date-slider-readout");
     this.listen("configure", (function(_this) {
       return function(options) {
-        var endYear, initialEndYear, initialStartYear, startYear, yearStep;
-        startYear = options.startYear, endYear = options.endYear, yearStep = options.yearStep, initialStartYear = options.initialStartYear, initialEndYear = options.initialEndYear;
-        _this.dateSliderStart.add(_this.dateSliderEnd).attr("min", startYear).attr("max", endYear).attr("step", yearStep);
-        _this.dateSliderStart.val(initialStartYear);
-        _this.dateSliderEnd.val(initialEndYear);
-        return _this.dateSliderStart.add(_this.dateSliderEnd).slider("refresh");
+        var endYear, startYear, yearStep;
+        startYear = options.startYear, endYear = options.endYear, yearStep = options.yearStep;
+        return _this.dateSliderStart.add(_this.dateSliderEnd).attr("min", startYear).attr("max", endYear).attr("step", yearStep);
+      };
+    })(this));
+    this.listen("set", (function(_this) {
+      return function(startVal, endVal) {
+        preventChangeFromHappenningHack = true;
+        _this.dateSliderStart.val(startVal);
+        _this.dateSliderEnd.val(endVal);
+        _this.dateSliderStart.add(_this.dateSliderEnd).slider("refresh");
+        return preventChangeFromHappenningHack = false;
       };
     })(this));
     this.dateSliderStart.on("change", (function(_this) {
       return function() {
-        return _this.post("update-start", parseInt(_this.dateSliderStart.val()));
+        if (!preventChangeFromHappenningHack) {
+          return _this.post("update-start", parseInt(_this.dateSliderStart.val()));
+        }
       };
     })(this));
     this.dateSliderEnd.on("change", (function(_this) {
       return function() {
-        return _this.post("update-end", parseInt(_this.dateSliderEnd.val()));
+        if (!preventChangeFromHappenningHack) {
+          return _this.post("update-end", parseInt(_this.dateSliderEnd.val()));
+        }
       };
     })(this));
     this.listen("set-text", (function(_this) {
@@ -990,6 +1006,7 @@ module.exports = new (HashController = (function(superClass) {
     this.sessionController = SessionController;
     this.delayedTimer = null;
     this.lastUpdate = null;
+    this.lastHash = null;
     this.sessionController.subscribe("append", (function(_this) {
       return function(session) {
         if (_this.delayedTimer != null) {
@@ -1005,21 +1022,24 @@ module.exports = new (HashController = (function(superClass) {
         }
       };
     })(this));
-    $(window).on("load", (function(_this) {
+    $(window).on("load hashchange", (function(_this) {
       return function() {
         var error;
-        try {
-          _this.sessionController.tell("replace-and-update", JSON.parse(window.decodeURIComponent(window.location.hash.slice(1))));
-        } catch (_error) {
-          error = _error;
+        if (_this.lastHash !== window.location.hash) {
+          try {
+            _this.sessionController.tell("replace-and-update", JSON.parse(window.decodeURIComponent(window.location.hash.slice(1))));
+          } catch (_error) {
+            error = _error;
+          }
+          _this.lastHash = window.location.hash;
+          return _this.sessionController.tell("append", {});
         }
-        return _this.sessionController.tell("append", {});
       };
     })(this));
   }
 
   HashController.prototype.updateLink = function(session) {
-    window.location.hash = "#" + (window.encodeURIComponent(JSON.stringify(session)));
+    window.location.hash = this.lastHash = "#" + (window.encodeURIComponent(JSON.stringify(session)));
     $("#share-link").val("" + window.location);
     return this.lastUpdate = Date.now();
   };
@@ -1039,7 +1059,7 @@ than a specified magnitude
 
 See DateFilter's header comment for more info on filters.
  */
-var CacheFilter, MagnitudeFilterController, MagnitudeFilterFilter, NNode,
+var CacheFilter, MagnitudeFilter, MagnitudeFilterController, NNode,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -1049,11 +1069,11 @@ CacheFilter = require("./CacheFilter");
 
 MagnitudeFilterController = require("./MagnitudeFilterController");
 
-module.exports = new (MagnitudeFilterFilter = (function(superClass) {
-  extend(MagnitudeFilterFilter, superClass);
+module.exports = new (MagnitudeFilter = (function(superClass) {
+  extend(MagnitudeFilter, superClass);
 
-  function MagnitudeFilterFilter() {
-    MagnitudeFilterFilter.__super__.constructor.apply(this, arguments);
+  function MagnitudeFilter() {
+    MagnitudeFilter.__super__.constructor.apply(this, arguments);
     this.controller = MagnitudeFilterController;
     this.minMagnitude = -Infinity;
     this.maxMagnitude = Infinity;
@@ -1102,7 +1122,7 @@ module.exports = new (MagnitudeFilterFilter = (function(superClass) {
   Note: minMagnitude is inclusive, maxMagnitude is exclusive
    */
 
-  MagnitudeFilterFilter.prototype.filterMagnitudes = function(data, minMagnitude, maxMagnitude, newArray) {
+  MagnitudeFilter.prototype.filterMagnitudes = function(data, minMagnitude, maxMagnitude, newArray) {
     var i, len, point, ref;
     if (newArray == null) {
       newArray = [];
@@ -1116,7 +1136,7 @@ module.exports = new (MagnitudeFilterFilter = (function(superClass) {
     return newArray;
   };
 
-  return MagnitudeFilterFilter;
+  return MagnitudeFilter;
 
 })(NNode));
 
@@ -1156,6 +1176,7 @@ module.exports = new (MagnitudeFilterController = (function(superClass) {
     this.uiMagnitudeSlider.subscribe("update", (function(_this) {
       return function(value) {
         _this.minMagnitude = value;
+        _this.limitMagnitudeJustInCase();
         _this.postControllerChanges();
         _this.updateMagnitudeSlider();
         return _this.updateSession();
@@ -1164,12 +1185,12 @@ module.exports = new (MagnitudeFilterController = (function(superClass) {
     this.uiMagnitudeSlider.tell("configure", {
       minMagnitude: MagnitudeFilterController.MIN_MAGNITUDE,
       maxMagnitude: MagnitudeFilterController.MAX_MAGNITUDE,
-      magnitudeStep: 0.1,
-      initialMinMagnitude: this.minMagnitude
+      magnitudeStep: 0.1
     });
     this.sessionController.subscribe("update", (function(_this) {
       return function(session) {
         _this.minMagnitude = session.minMagnitude;
+        _this.limitMagnitudeJustInCase();
         _this.postControllerChanges();
         return _this.updateMagnitudeSlider();
       };
@@ -1178,6 +1199,10 @@ module.exports = new (MagnitudeFilterController = (function(superClass) {
     this.updateSession();
     this.listen("request-update", this.postControllerChanges);
   }
+
+  MagnitudeFilterController.prototype.limitMagnitudeJustInCase = function() {
+    return this.minMagnitude = Math.min(Math.max(this.minMagnitude, MagnitudeFilterController.MIN_MAGNITUDE), MagnitudeFilterController.MAX_MAGNITUDE);
+  };
 
   MagnitudeFilterController.prototype.updateSession = function() {
     return this.sessionController.tell("append", {
@@ -1192,7 +1217,8 @@ module.exports = new (MagnitudeFilterController = (function(superClass) {
   };
 
   MagnitudeFilterController.prototype.updateMagnitudeSlider = function() {
-    return this.uiMagnitudeSlider.tell("set-text", "" + (DataFormatter.formatMagnitude(this.minMagnitude)));
+    this.uiMagnitudeSlider.tell("set-text", "" + (DataFormatter.formatMagnitude(this.minMagnitude)));
+    return this.uiMagnitudeSlider.tell("set", this.minMagnitude);
   };
 
   return MagnitudeFilterController;
@@ -1224,11 +1250,9 @@ module.exports = new (MagnitudeSliderUI = (function(superClass) {
     this.magnitudeSliderReadout = $("#magnitude-readout");
     this.listen("configure", (function(_this) {
       return function(options) {
-        var initialMinMagnitude, magnitudeStep, maxMagnitude, minMagnitude;
-        minMagnitude = options.minMagnitude, maxMagnitude = options.maxMagnitude, magnitudeStep = options.magnitudeStep, initialMinMagnitude = options.initialMinMagnitude;
-        _this.magnitudeSlider.attr("min", minMagnitude).attr("max", maxMagnitude).attr("step", magnitudeStep);
-        _this.magnitudeSlider.val(initialMinMagnitude);
-        return _this.magnitudeSlider.slider("refresh");
+        var magnitudeStep, maxMagnitude, minMagnitude;
+        minMagnitude = options.minMagnitude, maxMagnitude = options.maxMagnitude, magnitudeStep = options.magnitudeStep;
+        return _this.magnitudeSlider.attr("min", minMagnitude).attr("max", maxMagnitude).attr("step", magnitudeStep);
       };
     })(this));
     this.magnitudeSlider.on("change", (function(_this) {
@@ -1240,7 +1264,7 @@ module.exports = new (MagnitudeSliderUI = (function(superClass) {
     })(this));
     this.listen("set", function(value) {
       preventChangeFromHappenningHack = true;
-      this.magnitudeSlider.val(sliderVal).slider("refresh");
+      this.magnitudeSlider.val(value).slider("refresh");
       return preventChangeFromHappenningHack = false;
     });
     this.listen("set-text", function(text) {
@@ -1924,23 +1948,19 @@ require.define({"2D/Utils": function(exports, require, module) {
 
 NNode = require("./NNode");
 
-module.exports = App = (function(superClass) {
+module.exports = new (App = (function(superClass) {
   extend(App, superClass);
 
   function App() {
     App.__super__.constructor.apply(this, arguments);
-    $(document).on("pagecreate", (function(_this) {
-      return function() {
-        _this.superHackySliderKeyboardHack();
-        require("./EarthquakeLayerManager");
-        require("./BoundariesLayerManager");
-        require("./BaseMapLayerManager");
-        require("./ControlsManager");
-        require("./MapKeyController");
-        require("./MapViewManager");
-        return require("./HashController");
-      };
-    })(this));
+    this.superHackySliderKeyboardHack();
+    require("./EarthquakeLayerManager");
+    require("./BoundariesLayerManager");
+    require("./BaseMapLayerManager");
+    require("./ControlsManager");
+    require("./MapKeyController");
+    require("./MapViewManager");
+    require("./HashController");
   }
 
   App.prototype.superHackySliderKeyboardHack = function() {
@@ -1974,7 +1994,7 @@ module.exports = App = (function(superClass) {
 
   return App;
 
-})(NNode);
+})(NNode));
 
 
 }});
