@@ -144,6 +144,10 @@ p {
   top: 10px;
   z-index: 75;
 }
+#map-key #map-key-close {
+  z-index: 100;
+  margin: 0;
+}
 #map-key .key-column {
   min-width: 110px;
 }
@@ -176,6 +180,24 @@ p {
   position: absolute;
   top: 25px;
   left: 25px;
+}
+#map-key .boundaries-key {
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
+#map-key .boundaries-key .labels {
+  padding: 5px 0 5px 20px;
+  position: relative;
+}
+#map-key .boundaries-key .labels .indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 12px;
+}
+#map-key .boundaries-key .labels .needs-shadow {
+  box-shadow: 0 0 10px 0 rgba(0,0,0,0.2);
 }
 @-webkit-keyframes fantastic-entrance {
   0% {
