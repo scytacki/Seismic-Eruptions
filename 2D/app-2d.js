@@ -151,9 +151,11 @@ module.exports = new (BaseMapLayerManager = (function(superClass) {
       };
     })(this));
     this.sessionController.subscribe("update", (function(_this) {
-      return function(session) {
-        _this.baseLayer = session.baseLayer;
-        return _this.updateBaseLayer();
+      return function(updates) {
+        if ("baseLayer" in updates) {
+          _this.baseLayer = updates.baseLayer;
+          return _this.updateBaseLayer();
+        }
       };
     })(this));
     this.updateBaseLayer();
@@ -277,9 +279,11 @@ module.exports = new (BoundariesLayerManager = (function(superClass) {
       };
     })(this));
     this.sessionController.subscribe("update", (function(_this) {
-      return function(session) {
-        _this.boundariesVisible = session.boundariesVisible;
-        return _this.updateBoundaries();
+      return function(updates) {
+        if ("boundariesVisible" in updates) {
+          _this.boundariesVisible = updates.boundariesVisible;
+          return _this.updateBoundaries();
+        }
       };
     })(this));
     this.updateSession();
@@ -364,26 +368,28 @@ require.define({"2D/CacheFilter": function(exports, require, module) {
 CacheFilter - a class to receive data from the web and cache it all up, and serve it to the filters
 that come after.
 
-TODO: FIXME: HACK: NOTE: THIS CLASS IS HALF-BAKED at the moment
+NOTE: The cache functionality has been deactivated for now, because there is no spacial filter yet
  */
-var CacheFilter, NNode,
+var CacheFilter, EarthquakeProvider, NNode,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
 NNode = require("./NNode");
+
+EarthquakeProvider = require("./EarthquakeProvider");
 
 module.exports = new (CacheFilter = (function(superClass) {
   extend(CacheFilter, superClass);
 
   function CacheFilter() {
     CacheFilter.__super__.constructor.apply(this, arguments);
-    setTimeout((function(_this) {
-      return function() {
-        return $.ajax("earthquakeSeed.json").done(function(data) {
-          return _this.post("stream", data.features);
-        });
+    this.cachedData = [];
+    this.inputNode = EarthquakeProvider;
+    this.inputNode.subscribe("stream", (function(_this) {
+      return function(newData) {
+        return _this.post("flush", newData);
       };
-    })(this), 200);
+    })(this));
   }
 
   return CacheFilter;
@@ -426,9 +432,11 @@ module.exports = new (App = (function(superClass) {
       };
     })(this));
     this.sessionController.subscribe("update", (function(_this) {
-      return function(session) {
-        _this.controlsVisible = session.controlsVisible;
-        return _this.updateControlVisibility();
+      return function(updates) {
+        if ("controlsVisible" in updates) {
+          _this.controlsVisible = updates.controlsVisible;
+          return _this.updateControlVisibility();
+        }
       };
     })(this));
     this.updateSession();
@@ -645,7 +653,6 @@ module.exports = new (DateFilter = (function(superClass) {
         return _this.post("flush", _this.filterDates(_this.cachedData, _this.startDate, _this.endDate));
       };
     })(this));
-    this.inputNode.tell("request-update");
   }
 
 
@@ -749,12 +756,27 @@ module.exports = new (DateFilterController = (function(superClass) {
     })(this));
     this.listen("request-update", this.postControllerChanges);
     this.sessionController.subscribe("update", (function(_this) {
-      return function(session) {
-        _this.startDate = session.startDate, _this.animatedEndDate = session.animatedEndDate, _this.endDate = session.endDate;
-        _this.limitDatesJustInCase();
-        _this.postControllerChanges();
-        _this.updateDateRange();
-        return _this.updatePlaybackSlider();
+      return function(updates) {
+        var needsUpdating;
+        needsUpdating = false;
+        if ("startDate" in updates) {
+          _this.startDate = updates.startDate;
+          needsUpdating = true;
+        }
+        if ("animatedEndDate" in updates) {
+          _this.animatedEndDate = updates.animatedEndDate;
+          needsUpdating = true;
+        }
+        if ("endDate" in updates) {
+          _this.endDate = updates.endDate;
+          needsUpdating = true;
+        }
+        if (needsUpdating) {
+          _this.limitDatesJustInCase();
+          _this.postControllerChanges();
+          _this.updateDateRange();
+          return _this.updatePlaybackSlider();
+        }
       };
     })(this));
     this.updatePlaybackSlider();
@@ -983,6 +1005,72 @@ module.exports = new (EarthquakeLayerManager = (function(superClass) {
 
 }});
 
+require.define({"2D/EarthquakeProvider": function(exports, require, module) {
+  
+/*
+A class to load in earthquake data
+ */
+var EarthquakeProvider, NNode, SessionController,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+SessionController = require("./SessionController");
+
+module.exports = new (EarthquakeProvider = (function(superClass) {
+  extend(EarthquakeProvider, superClass);
+
+  function EarthquakeProvider() {
+    EarthquakeProvider.__super__.constructor.apply(this, arguments);
+    this.sessionController = SessionController;
+    this.cachedDatasets = [];
+    this.datasets = [];
+    $(document).ready((function(_this) {
+      return function() {
+        return _this.loadDatasets();
+      };
+    })(this));
+    this.sessionController.subscribe("update", (function(_this) {
+      return function(updates) {
+        if ("datasets" in updates) {
+          _this.datasets = updates.datasets;
+          return _this.loadDatasets();
+        }
+      };
+    })(this));
+    this.updateSession();
+  }
+
+  EarthquakeProvider.prototype.updateSession = function() {
+    return this.sessionController.tell("append", {
+      datasets: this.datasets
+    });
+  };
+
+  EarthquakeProvider.prototype.loadDatasets = function() {
+    var dataSetURL, i, len, ref, results;
+    ref = this.datasets;
+    results = [];
+    for (i = 0, len = ref.length; i < len; i++) {
+      dataSetURL = ref[i];
+      this.cachedDatasets.push(dataSetURL);
+      results.push($.ajax(dataSetURL).error(function() {}).done((function(_this) {
+        return function(data) {
+          return _this.post("stream", data.features);
+        };
+      })(this)));
+    }
+    return results;
+  };
+
+  return EarthquakeProvider;
+
+})(NNode));
+
+
+}});
+
 require.define({"2D/HashController": function(exports, require, module) {
   
 /*
@@ -1007,8 +1095,12 @@ module.exports = new (HashController = (function(superClass) {
     this.delayedTimer = null;
     this.lastUpdate = null;
     this.lastHash = null;
+    this.loadedHack = false;
     this.sessionController.subscribe("append", (function(_this) {
       return function(session) {
+        if (!_this.loadedHack) {
+          return;
+        }
         if (_this.delayedTimer != null) {
           clearTimeout(_this.delayedTimer);
           _this.delayedTimer = null;
@@ -1022,26 +1114,51 @@ module.exports = new (HashController = (function(superClass) {
         }
       };
     })(this));
-    $(window).on("load hashchange", (function(_this) {
+    $(window).on("hashchange", (function(_this) {
       return function() {
-        var error;
-        if (_this.lastHash !== window.location.hash) {
-          try {
-            _this.sessionController.tell("replace-and-update", JSON.parse(window.decodeURIComponent(window.location.hash.slice(1))));
-          } catch (_error) {
-            error = _error;
-          }
-          _this.lastHash = window.location.hash;
-          return _this.sessionController.tell("append", {});
-        }
+        return _this.manageHashChange();
+      };
+    })(this));
+    $(window).on("load", (function(_this) {
+      return function() {
+        _this.loadedHack = true;
+        return _this.manageHashChange();
       };
     })(this));
   }
+
+  HashController.prototype.manageHashChange = function() {
+    var error;
+    if (this.lastHash !== window.location.hash) {
+      if (this.isScaffoldHash(window.location.hash)) {
+        this.post("scaffold-update", window.location.hash.slice(10));
+        this.sessionController.tell("append", {});
+      } else {
+        try {
+          this.sessionController.tell("replace-and-update", JSON.parse(window.decodeURIComponent(window.location.hash.slice(1))));
+        } catch (_error) {
+          error = _error;
+          this.loadDefaults();
+        }
+        this.sessionController.tell("append", {});
+      }
+      return this.lastHash = window.location.hash;
+    }
+  };
+
+  HashController.prototype.loadDefaults = function() {
+    console.log("defaults");
+    return this.post("scaffold-update", "regions/world.json");
+  };
 
   HashController.prototype.updateLink = function(session) {
     window.location.hash = this.lastHash = "#" + (window.encodeURIComponent(JSON.stringify(session)));
     $("#share-link").val("" + window.location);
     return this.lastUpdate = Date.now();
+  };
+
+  HashController.prototype.isScaffoldHash = function(hash) {
+    return hash != null ? hash.startsWith("#scaffold:") : void 0;
   };
 
   return HashController;
@@ -1113,7 +1230,6 @@ module.exports = new (MagnitudeFilter = (function(superClass) {
         return _this.post("flush", _this.filterMagnitudes(_this.cachedData, _this.minMagnitude, _this.maxMagnitude));
       };
     })(this));
-    this.inputNode.tell("request-update");
   }
 
 
@@ -1188,11 +1304,13 @@ module.exports = new (MagnitudeFilterController = (function(superClass) {
       magnitudeStep: 0.1
     });
     this.sessionController.subscribe("update", (function(_this) {
-      return function(session) {
-        _this.minMagnitude = session.minMagnitude;
-        _this.limitMagnitudeJustInCase();
-        _this.postControllerChanges();
-        return _this.updateMagnitudeSlider();
+      return function(updates) {
+        if ("minMagnitude" in updates) {
+          _this.minMagnitude = updates.minMagnitude;
+          _this.limitMagnitudeJustInCase();
+          _this.postControllerChanges();
+          return _this.updateMagnitudeSlider();
+        }
       };
     })(this));
     this.updateMagnitudeSlider();
@@ -1323,9 +1441,11 @@ module.exports = new (MapKeyController = (function(superClass) {
     })()).join(""));
     this.sessionController = SessionController;
     this.sessionController.subscribe("update", (function(_this) {
-      return function(session) {
-        _this.keyVisible = session.keyVisible;
-        return _this.updateKeyVisibility();
+      return function(updates) {
+        if ("keyVisible" in updates) {
+          _this.keyVisible = updates.keyVisible;
+          return _this.updateKeyVisibility();
+        }
       };
     })(this));
     this.mapKeyToggle = MapKeyToggleUI;
@@ -1408,76 +1528,12 @@ module.exports = new (MapKeyToggleUI = (function(superClass) {
 
 }});
 
-require.define({"2D/MapView": function(exports, require, module) {
-  
-/*
-MapView - a class for creating a leaflet map and exposing parts of the map
-as an interface to child classes
- */
-var MapView, NNode,
-  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
-  hasProp = {}.hasOwnProperty;
-
-NNode = require("./NNode");
-
-module.exports = new (MapView = (function(superClass) {
-  extend(MapView, superClass);
-
-  function MapView() {
-    MapView.__super__.constructor.apply(this, arguments);
-    this.leafletMap = L.map("map");
-    $(window).on("load", (function(_this) {
-      return function() {
-        _this.leafletMap.invalidateSize();
-        _this.post("loaded");
-        return _this.leafletMap.on("moveend", function() {
-          return _this.post("bounds-update", _this.leafletMap.getBounds());
-        });
-      };
-    })(this));
-    this.listen("add-layer", (function(_this) {
-      return function(layer) {
-        return _this.leafletMap.addLayer(layer);
-      };
-    })(this));
-    this.listen("remove-layer", (function(_this) {
-      return function(layer) {
-        return _this.leafletMap.removeLayer(layer);
-      };
-    })(this));
-    this.listen("freeze", (function(_this) {
-      return function() {
-        _this.leafletMap.options.minZoom = _this.leafletMap.options.maxZoom = _this.leafletMap.getZoom();
-        return _this.leafletMap.setMaxBounds(_this.leafletMap.getBounds());
-      };
-    })(this));
-    this.listen("unfreeze", (function(_this) {
-      return function() {
-        _this.leafletMap.options.minZoom = 0;
-        _this.leafletMap.options.maxZoom = 18;
-        return _this.leafletMap.setMaxBounds(null);
-      };
-    })(this));
-    this.listen("set-bounds", (function(_this) {
-      return function(bounds) {
-        return _this.leafletMap.fitBounds(bounds);
-      };
-    })(this));
-  }
-
-  return MapView;
-
-})(NNode));
-
-
-}});
-
-require.define({"2D/MapViewManager": function(exports, require, module) {
+require.define({"2D/MapPerspectiveManager": function(exports, require, module) {
   
 /*
 Manages the map's movement (pan and zoom)
  */
-var MapView, MapViewManager, NNode, SessionController,
+var MapPerspectiveManager, MapView, NNode, SessionController,
   extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
   hasProp = {}.hasOwnProperty;
 
@@ -1487,11 +1543,11 @@ MapView = require("./MapView");
 
 SessionController = require("./SessionController");
 
-module.exports = new (MapViewManager = (function(superClass) {
-  extend(MapViewManager, superClass);
+module.exports = new (MapPerspectiveManager = (function(superClass) {
+  extend(MapPerspectiveManager, superClass);
 
-  function MapViewManager() {
-    MapViewManager.__super__.constructor.apply(this, arguments);
+  function MapPerspectiveManager() {
+    MapPerspectiveManager.__super__.constructor.apply(this, arguments);
     this.sessionController = SessionController;
     this.minLatitude = -40;
     this.minLongitude = -50;
@@ -1518,15 +1574,38 @@ module.exports = new (MapViewManager = (function(superClass) {
       };
     })(this));
     this.sessionController.subscribe("update", (function(_this) {
-      return function(session) {
-        _this.minLatitude = session.minLatitude, _this.maxLatitude = session.maxLatitude, _this.minLongitude = session.minLongitude, _this.maxLongitude = session.maxLongitude, _this.restrictedView = session.restrictedView;
-        return _this.updateMapView();
+      return function(updates) {
+        var needsUpdating;
+        needsUpdating = false;
+        if ("minLatitude" in updates) {
+          _this.minLatitude = updates.minLatitude;
+          needsUpdating = true;
+        }
+        if ("maxLatitude" in updates) {
+          _this.maxLatitude = updates.maxLatitude;
+          needsUpdating = true;
+        }
+        if ("minLongitude" in updates) {
+          _this.minLongitude = updates.minLongitude;
+          needsUpdating = true;
+        }
+        if ("maxLongitude" in updates) {
+          _this.maxLongitude = updates.maxLongitude;
+          needsUpdating = true;
+        }
+        if ("restrictedView" in updates) {
+          _this.restrictedView = updates.restrictedView;
+          needsUpdating = true;
+        }
+        if (needsUpdating) {
+          return _this.updateMapView();
+        }
       };
     })(this));
     this.updateSession();
   }
 
-  MapViewManager.prototype.updateSession = function() {
+  MapPerspectiveManager.prototype.updateSession = function() {
     return this.sessionController.tell("append", {
       minLatitude: this.minLatitude,
       minLongitude: this.minLongitude,
@@ -1536,18 +1615,89 @@ module.exports = new (MapViewManager = (function(superClass) {
     });
   };
 
-  MapViewManager.prototype.updateMapView = function() {
+  MapPerspectiveManager.prototype.updateMapView = function() {
+    var bounds;
     if (this.previouslyRestrictedView) {
       this.mapView.tell("unfreeze");
     }
-    this.mapView.tell("set-bounds", L.latLngBounds(L.latLng(this.minLatitude, this.minLongitude), L.latLng(this.maxLatitude, this.maxLongitude)));
+    bounds = L.latLngBounds(L.latLng(this.minLatitude, this.minLongitude), L.latLng(this.maxLatitude, this.maxLongitude));
+    this.mapView.tell("set-bounds", bounds);
     if (this.restrictedView) {
-      this.mapView.tell("freeze");
+      this.mapView.tell("freeze", bounds);
     }
     return this.previouslyRestrictedView = this.restrictedView;
   };
 
-  return MapViewManager;
+  return MapPerspectiveManager;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/MapView": function(exports, require, module) {
+  
+/*
+MapView - a class for creating a leaflet map and exposing parts of the map
+as an interface to child classes
+ */
+var MapView, NNode,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+module.exports = new (MapView = (function(superClass) {
+  extend(MapView, superClass);
+
+  function MapView() {
+    MapView.__super__.constructor.apply(this, arguments);
+    this.leafletMap = L.map("map");
+    this.frozen = null;
+    $(window).on("load", (function(_this) {
+      return function() {
+        _this.leafletMap.invalidateSize();
+        _this.post("loaded");
+        return _this.leafletMap.on("moveend", function() {
+          if (!_this.frozen) {
+            return _this.post("bounds-update", _this.leafletMap.getBounds());
+          }
+        });
+      };
+    })(this));
+    this.listen("add-layer", (function(_this) {
+      return function(layer) {
+        return _this.leafletMap.addLayer(layer);
+      };
+    })(this));
+    this.listen("remove-layer", (function(_this) {
+      return function(layer) {
+        return _this.leafletMap.removeLayer(layer);
+      };
+    })(this));
+    this.listen("freeze", (function(_this) {
+      return function(bounds) {
+        _this.frozen = true;
+        _this.leafletMap.setMaxBounds(bounds);
+        return _this.leafletMap.options.minZoom = _this.leafletMap.options.maxZoom = _this.leafletMap.getBoundsZoom(bounds);
+      };
+    })(this));
+    this.listen("unfreeze", (function(_this) {
+      return function() {
+        _this.frozen = false;
+        _this.leafletMap.setMaxBounds(null);
+        _this.leafletMap.options.minZoom = 0;
+        return _this.leafletMap.options.maxZoom = 18;
+      };
+    })(this));
+    this.listen("set-bounds", (function(_this) {
+      return function(bounds) {
+        return _this.leafletMap.fitBounds(bounds);
+      };
+    })(this));
+  }
+
+  return MapView;
 
 })(NNode));
 
@@ -1886,6 +2036,154 @@ module.exports = new (PlaybackSliderUI = (function(superClass) {
 
 }});
 
+require.define({"2D/ScaffoldController": function(exports, require, module) {
+  
+/*
+A class to manage scaffolding
+Loads in the scaffold geo json from a URL.
+Here are some example properties the json will have (all are optional except for type and features)
+{
+  "currentDatasets":[
+    "datasets/world.json"
+  ],
+  "minMagnitude":5,
+  "startDate":-315601200000,
+  "animatedEndDate":1438098194377, # The current value of the playback slider
+  "endDate":1438098194377, # This a date represented as an integer
+  "boundariesVisible":false,
+  "baseLayer":"satellite", # Can be satellite, street, or density
+  "controlsVisible":true,
+  "keyVisible":false,
+  "minLatitude":-40, # Defines the view of the map
+  "minLongitude":-50, # Defines the view of the map
+  "maxLatitude":40, # Defines the view of the map
+  "maxLongitude":50, # Defines the view of the map
+  "restrictedView":false, # Whether or not the user will be able to pan/zoom
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {},
+      "geometry": {
+         * ... stuff. Use a geojson generator to populate this
+      }
+    },
+  ]
+}
+ */
+var HashController, NNode, ScaffoldController, SessionController,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+SessionController = require("./SessionController");
+
+HashController = require("./HashController");
+
+module.exports = new (ScaffoldController = (function(superClass) {
+  extend(ScaffoldController, superClass);
+
+  function ScaffoldController() {
+    ScaffoldController.__super__.constructor.apply(this, arguments);
+    this.sessionController = SessionController;
+    this.hashController = HashController;
+    this.scaffold = "";
+    this.hashController.subscribe("scaffold-update", (function(_this) {
+      return function(scaffoldURL) {
+        _this.scaffold = scaffoldURL;
+        _this.updateScaffold(true);
+        return _this.updateSession();
+      };
+    })(this));
+    this.sessionController.subscribe("update", (function(_this) {
+      return function(updates) {
+        if ("scaffold" in updates) {
+          _this.scaffold = updates.scaffold;
+          return _this.updateScaffold(false);
+        }
+      };
+    })(this));
+    this.updateScaffold();
+    this.updateSession();
+  }
+
+  ScaffoldController.prototype.updateSession = function() {
+    return this.sessionController.tell("append", {
+      scaffold: this.scaffold
+    });
+  };
+
+  ScaffoldController.prototype.updateScaffold = function(alsoUpdateSession) {
+    if (this.scaffold.length > 0) {
+      return $.ajax(this.scaffold).done((function(_this) {
+        return function(data) {
+          _this.post("update", data);
+          if (alsoUpdateSession) {
+            return _this.sessionController.tell("replace-and-update", data);
+          }
+        };
+      })(this));
+    }
+  };
+
+  return ScaffoldController;
+
+})(NNode));
+
+
+}});
+
+require.define({"2D/ScaffoldLayerManager": function(exports, require, module) {
+  
+/*
+A class to manage the scaffold layer
+ */
+var MapView, NNode, ScaffoldController, ScaffoldLayerManager,
+  extend = function(child, parent) { for (var key in parent) { if (hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor(); child.__super__ = parent.prototype; return child; },
+  hasProp = {}.hasOwnProperty;
+
+NNode = require("./NNode");
+
+ScaffoldController = require("./ScaffoldController");
+
+MapView = require("./MapView");
+
+module.exports = new (ScaffoldLayerManager = (function(superClass) {
+  extend(ScaffoldLayerManager, superClass);
+
+  function ScaffoldLayerManager() {
+    ScaffoldLayerManager.__super__.constructor.apply(this, arguments);
+    this.mapView = MapView;
+    this.scaffoldLayer = null;
+    this.scaffoldController = ScaffoldController;
+    this.scaffoldController.subscribe("update", (function(_this) {
+      return function(features) {
+        return _this.buildLayer(features);
+      };
+    })(this));
+  }
+
+  ScaffoldLayerManager.prototype.buildLayer = function(features) {
+    if (this.scaffoldLayer != null) {
+      this.mapView.tell("remove-layer", this.scaffoldLayer);
+    }
+    this.scaffoldLayer = L.geoJson(features, {
+      onEachFeature: function(featureData, marker) {
+        marker.clickable = true;
+        return marker.bindPopup(featureData.properties.label + "<br>\n<a href=\"\" onclick=\"window.location.hash='scaffold:" + featureData.properties.scaffold + "'\">Go!</a>");
+      }
+    });
+    return this.mapView.tell("add-layer", this.scaffoldLayer);
+  };
+
+  return ScaffoldLayerManager;
+
+})(NNode));
+
+
+}});
+
 require.define({"2D/SessionController": function(exports, require, module) {
   
 /*
@@ -1915,18 +2213,38 @@ module.exports = new (SessionController = (function(superClass) {
     })(this));
     this.listen("replace-and-update", (function(_this) {
       return function(params) {
-        var key;
+        var key, updates;
+        updates = {};
         for (key in _this.session) {
           if (params[key] != null) {
             if (typeof _this.session[key] === typeof params[key]) {
-              _this.session[key] = params[key];
+              if (!_this.isEqual(_this.session[key], params[key])) {
+                updates[key] = _this.session[key] = params[key];
+              }
             }
           }
         }
-        return _this.post("update", _this.session);
+        return _this.post("update", updates);
       };
     })(this));
   }
+
+  SessionController.prototype.isEqual = function(a, b) {
+    var i, j, ref;
+    if (a instanceof Array) {
+      if (a.length !== b.length) {
+        return false;
+      }
+      for (i = j = 0, ref = a.length; 0 <= ref ? j < ref : j > ref; i = 0 <= ref ? ++j : --j) {
+        if (!this.isEqual(a[i], b[i])) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      return a === b;
+    }
+  };
 
   return SessionController;
 
@@ -1957,9 +2275,10 @@ module.exports = new (App = (function(superClass) {
     require("./EarthquakeLayerManager");
     require("./BoundariesLayerManager");
     require("./BaseMapLayerManager");
+    require("./ScaffoldLayerManager");
     require("./ControlsManager");
     require("./MapKeyController");
-    require("./MapViewManager");
+    require("./MapPerspectiveManager");
     require("./HashController");
   }
 
