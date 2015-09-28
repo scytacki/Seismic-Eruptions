@@ -10,7 +10,7 @@
     {
       "type": "Feature",
       "properties": {
-        "label": "California",
+        "label": "California-really",
         "scaffold": "regions/california.json"
       },
       "geometry": {
