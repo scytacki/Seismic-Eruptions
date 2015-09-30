@@ -1,9 +1,9 @@
 {
   "datasets":["datasets/Aleutians.json"],
-  "maxLatitude": 59,
-  "maxLongitude": -148,
+  "maxLatitude": 58,
+  "maxLongitude": -152,
   "minLatitude": 46,
-  "minLongitude": -198,
+  "minLongitude": -196,
   "restrictedView":true,
   "type": "FeatureCollection",
   "features": []
