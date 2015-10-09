@@ -10,6 +10,74 @@
     {
       "type": "Feature",
       "properties": {
+        "label": "North America",
+        "scaffold": "regions/namerica.json"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+           [
+             -110.21484375,
+             52.802761415419674
+           ],
+           [
+             -110.21484375,
+             57.231502991478926
+           ],
+           [
+             -100.1953125,
+             57.231502991478926
+           ],
+           [
+             -100.1953125,
+             52.802761415419674
+           ],
+           [
+             -110.21484375,
+             52.802761415419674
+           ]
+         ]
+       ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "label": "Lower 48 States",
+        "scaffold": "regions/usgroup.json"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+           [
+             [
+               -102.48046875,
+               37.71859032558813
+             ],
+             [
+               -102.48046875,
+               41.77131167976407
+             ],
+             [
+               -89.82421875,
+               41.77131167976407
+             ],
+             [
+               -89.82421875,
+               37.71859032558813
+             ],
+             [
+               -102.48046875,
+               37.71859032558813
+             ]
+           ]
+         ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
         "label": "Alaska Group",
         "scaffold": "regions/alaskagroup.json"
       },

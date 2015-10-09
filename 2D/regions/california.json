@@ -1,10 +1,113 @@
 {
   "datasets":["datasets/california.json"],
-  "minLatitude":32,
-  "minLongitude":-130,
-  "maxLatitude":45,
-  "maxLongitude":-110,
+  "maxLatitude": 43,
+  "maxLongitude": -114,
+  "minLatitude": 31,
+  "minLongitude": -130,
   "restrictedView":true,
   "type": "FeatureCollection",
-  "features": []
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "label": "Cape Mendocino",
+        "scaffold": "regions/capemendocino.json"
+      },
+      "geometry": {
+        "coordinates": [
+           [
+             [
+               -125.5078125,
+               40.74725696280421
+             ],
+             [
+               -125.5078125,
+               41.31082388091818
+             ],
+             [
+               -124.0576171875,
+               41.31082388091818
+             ],
+             [
+               -124.0576171875,
+               40.74725696280421
+             ],
+             [
+               -125.5078125,
+               40.74725696280421
+             ]
+           ]
+         ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "label": "Cape Mendocino 1992",
+        "scaffold": "regions/capemendocino1992.json"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+           [
+             -123.70605468750001,
+             40.68063802521456
+           ],
+           [
+             -123.70605468750001,
+             41.37680856570233
+           ],
+           [
+             -122.34374999999999,
+             41.37680856570233
+           ],
+           [
+             -122.34374999999999,
+             40.68063802521456
+           ],
+           [
+             -123.70605468750001,
+             40.68063802521456
+           ]
+         ]
+       ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "label": "Northern California",
+        "scaffold": "regions/northcalifornia.json"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+         [
+           [
+             -122.1240234375,
+             40.78054143186031
+           ],
+           [
+             -122.1240234375,
+             41.47566020027821
+           ],
+           [
+             -120.5419921875,
+             41.47566020027821
+           ],
+           [
+             -120.5419921875,
+             40.78054143186031
+           ],
+           [
+             -122.1240234375,
+             40.78054143186031
+           ]
+         ]
+       ]
+      }
+    }
+
+  ]
 }
