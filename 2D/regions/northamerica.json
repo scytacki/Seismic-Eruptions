@@ -142,6 +142,40 @@
           ]
         ]
       }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "label": "Mexico and Central America",
+        "scaffold": "regions/mexicocentralamerica.json"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+           [
+             [
+               -105.1171875,
+               20.96143961409685
+             ],
+             [
+               -105.1171875,
+               24.846565348219734
+             ],
+             [
+               -96.6796875,
+               24.846565348219734
+             ],
+             [
+               -96.6796875,
+               20.96143961409685
+             ],
+             [
+               -105.1171875,
+               20.96143961409685
+             ]
+           ]
+         ]
+      }
     }
   ]
 }
